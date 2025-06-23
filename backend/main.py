@@ -1,5 +1,6 @@
 from fastapi import FastAPI, status
-from pydantic import BaseModel
+from schemas import *
+from openai import OpenAI
 
 app = FastAPI(
     title="MLTC API",
@@ -8,8 +9,6 @@ app = FastAPI(
     redoc_url=None          # disable ReDoc because it's not needed
 )
 
-class PingResponse(BaseModel):
-    message: str
 
 @app.get("/ping", response_model=PingResponse, status_code=status.HTTP_200_OK)
 async def ping() -> PingResponse:
