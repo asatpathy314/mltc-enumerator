@@ -42,7 +42,9 @@ async def ping() -> PingResponse:
 @app.post("/context", response_model=ContextEnumeration, status_code=status.HTTP_200_OK)
 async def context(request: ContextRequest) -> ContextEnumeration:
     """
-    Get the context for the MLTC.
+    Enumerate a context preview.
+    The context preview is a list of attackers, entry points, and assets associated with probabilities.
+    The human will modify this context preview to generate a ground truth for further analysis.
     """
     start_time = time.time()
     logger.info("Context endpoint called")
@@ -147,3 +149,12 @@ DFD:
         processing_time = time.time() - start_time
         logger.error(f"Error in context endpoint after {processing_time:.2f}s: {str(e)}", exc_info=True)
         raise
+
+@app.post("/generate", response_model=ContextEnumeration, status_code=status.HTTP_200_OK)
+async def generate(request: VerifiedContext) -> ContextEnumeration:
+    """
+    Generate threat chains.
+    """
+    start_time = time.time()
+    logger.info("Generate endpoint called")
+    logger.debug(f"Request data: textual_dfd length={len(request.textual_dfd)}, extra_prompt={'present' if request.extra_prompt else 'absent'}")

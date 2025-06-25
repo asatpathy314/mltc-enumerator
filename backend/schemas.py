@@ -15,6 +15,15 @@ class ReviewStatus(str, Enum):
     accepted = "accepted"
     rejected = "rejected"
 
+class ThreatCategory(str, Enum):
+    spoofing = "spoofing"
+    tampering = "tampering"
+    repudiation = "repudiation"
+    information_disclosure = "information_disclosure"
+    denial_of_service = "denial_of_service"
+    elevation_of_privilege = "elevation_of_privilege"
+    other = "other"
+
 class Likert(IntEnum):      # 1-5 scale for "likelihood", "value", etc.
     very_low = 1
     low = 2
@@ -102,9 +111,22 @@ class ContextEnumeration(BaseModel):
     assets: List[Asset]
 
 class VerifiedContext(BaseModel):
+    textual_dfd: str
     attackers: List[AttackerProfileRanking]
     entry_points: List[EntryPointRanking]
     assets: List[AssetValueRanking]
+
+class ThreatChain(BaseModel):
+    name: str
+    chain: List[str]
+    category: ThreatCategory
+    description: str
+    mitre_atlas: str
+    mitre_attack: str
+    mitigations: List[str]
+
+class ThreatEnumeration(BaseModel):
+    threat_chains: List[ThreatChain]
 
 def convert_raw_to_final(raw_context: ContextEnumerationRaw) -> ContextEnumeration:
     """Convert the raw LLM response to the final schema with UUIDs."""
