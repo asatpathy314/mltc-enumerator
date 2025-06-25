@@ -94,3 +94,14 @@ docker-compose up --build
 - Frontend runs with hot reloading enabled
 - Backend runs with `--reload` flag for automatic restarts
 - Code changes are reflected immediately without rebuilding containers 
+
+## System Description
+This is the general outline of how the system works.
+
+On the backend, there are three main endpoints.
+
+- `/context` - The context endpoints generates preliminary attacker profiles, entrypoints, and assets in the system based on the textual description of the DFD. Further, it the user can provide "hints" to the system in order to guide the initial enumeration.
+- `/generate` - After the user verifies the initial enumeration by editing existing descriptions, removing irrelevant ones, and adding important aspects that the initial enumeration missed, they send the updated context to the generate endpoint.
+- `/iterate` - This will be a separate prompting system that uses Tree-of-Thought (ToT) prompting methods to send back potential iterations to the user interface where the user can then choose which modifications seem most likely to improve the system and then the user can choose to continue the iteration process.
+
+On the frontend the user accomplishes the manual modifications described above.
