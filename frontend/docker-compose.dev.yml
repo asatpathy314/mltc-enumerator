@@ -1,6 +1,19 @@
-version: '3.8'
-
 services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+      - LLM_BASE_URL=http://host.docker.internal:1234/v1
+    volumes:
+      - ../backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - mltc-network
+
   frontend-dev:
     build:
       context: .
@@ -16,14 +29,15 @@ services:
       - NODE_ENV=development
       - NEXT_TELEMETRY_DISABLED=1
       - CHOKIDAR_USEPOLLING=true
-      # Backend API URL for development
       - NEXT_PUBLIC_API_URL=http://localhost:8000
     stdin_open: true
     tty: true
     restart: unless-stopped
+    depends_on:
+      - backend
     networks:
       - mltc-network
 
 networks:
   mltc-network:
-    external: true 
+    driver: bridge 

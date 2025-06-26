@@ -2,6 +2,12 @@ import { ContextRequest, ContextEnumeration, VerifiedContext, ThreatEnumeration 
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+// Debug logging for development
+if (typeof window !== 'undefined') {
+  console.log('API_BASE_URL:', API_BASE_URL);
+  console.log('NEXT_PUBLIC_API_URL env var:', process.env.NEXT_PUBLIC_API_URL);
+}
+
 export async function postContext(request: ContextRequest): Promise<ContextEnumeration> {
   const response = await fetch(`${API_BASE_URL}/context`, {
     method: 'POST',

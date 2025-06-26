@@ -52,6 +52,9 @@ export interface ContextEnumeration {
     attackers: Attacker[];
     entry_points: EntryPoint[];
     assets: Asset[];
+    assumptions: string[];
+    questions: string[];
+    answers: string[];
 }
 
 // Ranking schemas for review
@@ -83,7 +86,8 @@ export interface AttackerProfileRanking {
 export interface ContextRequest {
     textual_dfd: string;
     extra_prompt?: string;
-    supply_chain_answers: string[];
+    questions: string[];
+    answers: string[];
 }
 
 export interface VerifiedContext {
@@ -91,6 +95,9 @@ export interface VerifiedContext {
     attackers: AttackerProfileRanking[];
     entry_points: EntryPointRanking[];
     assets: AssetValueRanking[];
+    assumptions: string[];
+    questions: string[];
+    answers: string[];
 }
 
 // Threat schemas

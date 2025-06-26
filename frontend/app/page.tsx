@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Shield, AlertTriangle, Loader2, CheckCircle, ArrowRight, ArrowLeft, Users, Target } from "lucide-react";
+import { Shield, AlertTriangle, Loader2, CheckCircle, ArrowRight, ArrowLeft, Users, Target, FileText, RefreshCw } from "lucide-react";
 import LikertScale from './components/LikertScale';
 import ContextEditor from './components/ContextEditor';
 import DFDInput from './components/DFDInput';
@@ -38,7 +38,11 @@ export default function Home() {
   const [entryPointRankings, setEntryPointRankings] = useState<Record<string, EntryPointRanking>>({});
   const [assetRankings, setAssetRankings] = useState<Record<string, AssetValueRanking>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
-  const [activeReviewTab, setActiveReviewTab] = useState<'attackers' | 'entrypoints' | 'assets'>('attackers');
+  const [activeReviewTab, setActiveReviewTab] = useState<'assumptions' | 'attackers' | 'entrypoints' | 'assets'>('assumptions');
+  
+  // Assumptions state
+  const [editedAssumptions, setEditedAssumptions] = useState<string[]>([]);
+  const [lastRequest, setLastRequest] = useState<ContextRequest | null>(null);
 
   const handleContextRequest = async (request: ContextRequest) => {
     setIsLoading(true);
@@ -47,6 +51,8 @@ export default function Home() {
       const result = await postContext(request);
       setContextEnumeration(result);
       setTextualDfd(request.textual_dfd);
+      setEditedAssumptions(result.assumptions || []);
+      setLastRequest(request);
       setAppState('review');
     } catch (err) {
       setError('Failed to generate context. Please try again.');
@@ -67,6 +73,9 @@ export default function Home() {
       attackers: Object.values(attackerRankings),
       entry_points: Object.values(entryPointRankings),
       assets: Object.values(assetRankings),
+      assumptions: editedAssumptions,
+      questions: contextEnumeration.questions || [],
+      answers: contextEnumeration.answers || [],
     };
 
     // Check if all items are ranked
@@ -104,7 +113,9 @@ export default function Home() {
     setEntryPointRankings({});
     setAssetRankings({});
     setComments({});
-    setActiveReviewTab('attackers');
+    setActiveReviewTab('assumptions');
+    setEditedAssumptions([]);
+    setLastRequest(null);
   };
 
   const handleAttackerRankingChange = (id: string, threat_level: Likert) => {
@@ -157,6 +168,43 @@ export default function Home() {
     }
     if(assetRankings[id]) {
         handleAssetRankingChange(id, assetRankings[id].value);
+    }
+  };
+
+  const handleRegenerateWithAssumptions = async () => {
+    if (!lastRequest) {
+      setError('No previous request available for regeneration.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      // Create a new request with the original DFD and updated assumptions as extra context
+      const assumptionsText = editedAssumptions.length > 0 
+        ? `\n\nCORRECTED ASSUMPTIONS:\n${editedAssumptions.map((a, i) => `${i + 1}. ${a}`).join('\n')}`
+        : '';
+      
+      const updatedRequest: ContextRequest = {
+        ...lastRequest,
+        extra_prompt: (lastRequest.extra_prompt || '') + assumptionsText
+      };
+
+      const result = await postContext(updatedRequest);
+      setContextEnumeration(result);
+      setEditedAssumptions(result.assumptions || []);
+      
+      // Clear existing rankings since we have new data
+      setAttackerRankings({});
+      setEntryPointRankings({});
+      setAssetRankings({});
+      setComments({});
+      
+    } catch (err) {
+      setError('Failed to regenerate context. Please try again.');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -308,7 +356,15 @@ export default function Home() {
             </div>
 
             {/* Review Tab Selector */}
-            <div className="flex gap-4 justify-center border-b pb-4">
+            <div className="flex gap-2 justify-center border-b pb-4 flex-wrap">
+              <Button
+                variant={activeReviewTab === 'assumptions' ? 'default' : 'outline'}
+                onClick={() => setActiveReviewTab('assumptions')}
+                className="flex items-center gap-2"
+              >
+                <FileText className="h-4 w-4" />
+                Assumptions ({contextEnumeration.assumptions?.length || 0})
+              </Button>
               <Button
                 variant={activeReviewTab === 'attackers' ? 'default' : 'outline'}
                 onClick={() => setActiveReviewTab('attackers')}
@@ -337,6 +393,72 @@ export default function Home() {
                 Assets ({contextEnumeration.assets.length})
               </Button>
             </div>
+
+            {/* Assumptions Tab */}
+            {activeReviewTab === 'assumptions' && (
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Review & Edit Assumptions</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Review the AI's assumptions about your system. Edit them if needed and regenerate the context for better accuracy.
+                </p>
+                
+                <div className="space-y-4">
+                  {editedAssumptions.map((assumption, index) => (
+                    <Card key={index} className="p-4">
+                      <div className="space-y-2">
+                        <Label htmlFor={`assumption-${index}`}>Assumption {index + 1}</Label>
+                        <Textarea
+                          id={`assumption-${index}`}
+                          value={assumption}
+                          onChange={(e) => {
+                            const newAssumptions = [...editedAssumptions];
+                            newAssumptions[index] = e.target.value;
+                            setEditedAssumptions(newAssumptions);
+                          }}
+                          rows={2}
+                        />
+                      </div>
+                    </Card>
+                  ))}
+                  
+                  {editedAssumptions.length === 0 && (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">No assumptions generated yet.</p>
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-2 pt-4">
+                    <Button 
+                      onClick={() => setEditedAssumptions([...editedAssumptions, ""])}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Add Assumption
+                    </Button>
+                    
+                    {editedAssumptions.length > 0 && (
+                      <Button 
+                        onClick={handleRegenerateWithAssumptions}
+                        disabled={isLoading}
+                        size="sm"
+                      >
+                                                 {isLoading ? (
+                           <>
+                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                             Regenerating...
+                           </>
+                         ) : (
+                           <>
+                             <RefreshCw className="h-4 w-4 mr-2" />
+                             Regenerate with Corrected Assumptions
+                           </>
+                         )}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Attackers Tab */}
             {activeReviewTab === 'attackers' && contextEnumeration.attackers.length > 0 && (
