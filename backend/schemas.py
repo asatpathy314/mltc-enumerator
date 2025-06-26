@@ -57,6 +57,7 @@ class ContextEnumerationRaw(BaseModel):
     attackers: List[AttackerRaw]
     entry_points: List[EntryPointRaw]
     assets: List[AssetRaw]
+    assumptions: List[str]
 
 # Final schemas (with UUIDs)
 class Attacker(BaseModel):
@@ -103,18 +104,25 @@ class AttackerProfileRanking(BaseModel):
 class ContextRequest(BaseModel):
     textual_dfd: str
     extra_prompt: Optional[str] = None
-    supply_chain_answers: List[str]
+    questions: List[str]
+    answers: List[str]
 
 class ContextEnumeration(BaseModel):
     attackers: List[Attacker]
     entry_points: List[EntryPoint]
     assets: List[Asset]
+    assumptions: List[str]
+    questions: List[str]
+    answers: List[str]
 
 class VerifiedContext(BaseModel):
     textual_dfd: str
     attackers: List[AttackerProfileRanking]
     entry_points: List[EntryPointRanking]
     assets: List[AssetValueRanking]
+    assumptions: List[str]
+    questions: List[str]
+    answers: List[str]
 
 class ThreatChain(BaseModel):
     name: str
@@ -170,10 +178,15 @@ def convert_raw_to_final(raw_context: ContextEnumerationRaw) -> ContextEnumerati
     return ContextEnumeration(
         attackers=attackers,
         entry_points=entry_points,
-        assets=assets
+        assets=assets,
+        assumptions=raw_context.assumptions,
+        questions=[],  # Will be populated from request
+        answers=[]     # Will be populated from request
     )
 
 # ### Supply Chain Questions
 # Where's this model coming from?
 # What's the model trained on?
 # Where's the data that the model is trained on stored?
+# ### Context Enumeration
+# 

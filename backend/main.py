@@ -1,4 +1,5 @@
 from fastapi import FastAPI, status
+from fastapi.middleware.cors import CORSMiddleware
 from schemas import *
 from schemas import convert_raw_to_final
 from openai import OpenAI
@@ -24,6 +25,19 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/",           # swagger on root
     redoc_url=None          # disable ReDoc because it's not needed
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",  # Frontend development server
+        "http://127.0.0.1:3000",  # Alternative localhost
+        "http://frontend:3000",   # Docker internal network
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 logger.info("MLTC API starting up...")
@@ -55,15 +69,27 @@ async def context(request: ContextRequest) -> ContextEnumeration:
         hint_section = f"\n\n### HINT\n{request.extra_prompt}" if request.extra_prompt else ""
         logger.debug(f"Hint section: {'added' if hint_section else 'not added'}")
         
+        # Build the questions and answers section
+        qa_section = ""
+        if request.questions and request.answers:
+            qa_pairs = []
+            for i, (q, a) in enumerate(zip(request.questions, request.answers)):
+                if a.strip():  # Only include answered questions
+                    qa_pairs.append(f"Q{i+1}: {q}\nA{i+1}: {a}")
+            if qa_pairs:
+                qa_section = f"\n\n### CONTEXTUAL Q&A\n" + "\n\n".join(qa_pairs)
+        logger.debug(f"Q&A section: {'added' if qa_section else 'not added'}")
+        
         prompt = f"""### ROLE
 You are a senior security-threat-modeling analyst.
 
 ### TASK
-From the **Data-Flow Diagram (DFD)** and the optional **Hint** provided below, identify every:
+From the **Data-Flow Diagram (DFD)**, optional **Hint**, and **Contextual Q&A** provided below, identify every:
 
 1. **Attacker** - any actor that can threaten the system.
 2. **EntryPoint** - any interface, channel, or location an attacker could use to gain a foothold.
 3. **Asset** - any component or data store whose loss or compromise matters.
+4. **Assumptions** - key assumptions you are making about the system, users, environment, or security controls.
 
 ### SCHEMA (strict)
 class Likert(IntEnum):      # 1 = very_low … 5 = very_high
@@ -94,7 +120,8 @@ class Asset:
 {{
   "attackers": [Attacker, ...],
   "entry_points": [EntryPoint, ...],
-  "assets": [Asset, ...]
+  "assets": [Asset, ...],
+  "assumptions": [string, ...] # list of key assumptions (aim for 3-8 items)
 }}
 
 CRITICAL: Output ONLY the JSON object. No thinking tags, no comments, no markdown, no explanatory text. Start your response with {{ and end with }}.
@@ -113,7 +140,7 @@ Think in two phases:
 
 ### INPUT
 DFD:
-{request.textual_dfd}{hint_section}
+{request.textual_dfd}{hint_section}{qa_section}
 """
         
         logger.info("Initializing LLM client")
@@ -139,9 +166,13 @@ DFD:
         logger.info("Converting raw response to final schema with UUIDs...")
         result = convert_raw_to_final(raw_result)
         
+        # Add questions and answers from the request
+        result.questions = request.questions
+        result.answers = request.answers
+        
         processing_time = time.time() - start_time
         logger.info(f"Context endpoint completed successfully in {processing_time:.2f}s")
-        logger.debug(f"Response contains: {len(result.attackers)} attackers, {len(result.entry_points)} entry points, {len(result.assets)} assets")
+        logger.debug(f"Response contains: {len(result.attackers)} attackers, {len(result.entry_points)} entry points, {len(result.assets)} assets, {len(result.assumptions)} assumptions")
         
         return result
         
@@ -150,11 +181,25 @@ DFD:
         logger.error(f"Error in context endpoint after {processing_time:.2f}s: {str(e)}", exc_info=True)
         raise
 
-@app.post("/generate", response_model=ContextEnumeration, status_code=status.HTTP_200_OK)
-async def generate(request: VerifiedContext) -> ContextEnumeration:
+@app.post("/generate", response_model=ThreatEnumeration, status_code=status.HTTP_200_OK)
+async def generate(request: VerifiedContext) -> ThreatEnumeration:
     """
     Generate threat chains.
     """
     start_time = time.time()
     logger.info("Generate endpoint called")
-    logger.debug(f"Request data: textual_dfd length={len(request.textual_dfd)}, extra_prompt={'present' if request.extra_prompt else 'absent'}")
+    logger.debug(f"Request data: textual_dfd length={len(request.textual_dfd)}, attackers={len(request.attackers)}, entry_points={len(request.entry_points)}, assets={len(request.assets)}")
+    
+    try:
+        # For now, return a placeholder - this endpoint needs full implementation
+        # TODO: Implement threat chain generation
+        placeholder_result = ThreatEnumeration(threat_chains=[])
+        
+        processing_time = time.time() - start_time
+        logger.info(f"Generate endpoint completed in {processing_time:.2f}s")
+        return placeholder_result
+        
+    except Exception as e:
+        processing_time = time.time() - start_time
+        logger.error(f"Error in generate endpoint after {processing_time:.2f}s: {str(e)}", exc_info=True)
+        raise

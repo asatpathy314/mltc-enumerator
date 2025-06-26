@@ -16,9 +16,19 @@ A full-stack application with Next.js frontend and FastAPI backend.
 ```
 
 #### Development Mode (with hot reloading)
+
+Option 1 - Run from project root (recommended):
 ```bash
 ./start-dev.sh
 ```
+
+Option 2 - Run from frontend directory:
+```bash
+cd frontend
+./start-dev.sh
+```
+
+Both options will start both the frontend and backend services with hot reloading.
 
 ### Services
 
