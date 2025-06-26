@@ -9,12 +9,6 @@ logger = logging.getLogger(__name__)
 
 class PingResponse(BaseModel):
     message: str
-
-class ReviewStatus(str, Enum):
-    pending = "pending"
-    accepted = "accepted"
-    rejected = "rejected"
-
 class ThreatCategory(str, Enum):
     spoofing = "spoofing"
     tampering = "tampering"
@@ -58,6 +52,8 @@ class ContextEnumerationRaw(BaseModel):
     entry_points: List[EntryPointRaw]
     assets: List[AssetRaw]
     assumptions: List[str]
+    questions: List[str] = []
+    answers: List[str] = []
 
 # Final schemas (with UUIDs)
 class Attacker(BaseModel):
@@ -80,26 +76,14 @@ class Asset(BaseModel):
     description: str
     failure_modes: List[str]
 
-class EntryPointRanking(BaseModel):
-    entry_id: UUID
-    likelihood: Likert
-    reviewer: str
-    status: ReviewStatus = ReviewStatus.pending
-    comments: Optional[str] = None
-
-class AssetValueRanking(BaseModel):
-    asset_id: UUID
-    value: Likert
-    reviewer: str
-    status: ReviewStatus = ReviewStatus.pending
-    comments: Optional[str] = None
-
-class AttackerProfileRanking(BaseModel):
-    attacker_id: UUID
-    threat_level: Likert
-    reviewer: str
-    status: ReviewStatus = ReviewStatus.pending
-    comments: Optional[str] = None
+class ContextEnumeration(BaseModel):
+    """Schema for LLM response"""
+    attackers: List[Attacker]
+    entry_points: List[EntryPoint]
+    assets: List[Asset]
+    assumptions: List[str]
+    questions: List[str] = []
+    answers: List[str] = []
 
 class ContextRequest(BaseModel):
     textual_dfd: str
@@ -107,19 +91,11 @@ class ContextRequest(BaseModel):
     questions: List[str]
     answers: List[str]
 
-class ContextEnumeration(BaseModel):
+class ContextRegenerationRequest(BaseModel):
+    textual_dfd: str
     attackers: List[Attacker]
     entry_points: List[EntryPoint]
     assets: List[Asset]
-    assumptions: List[str]
-    questions: List[str]
-    answers: List[str]
-
-class VerifiedContext(BaseModel):
-    textual_dfd: str
-    attackers: List[AttackerProfileRanking]
-    entry_points: List[EntryPointRanking]
-    assets: List[AssetValueRanking]
     assumptions: List[str]
     questions: List[str]
     answers: List[str]
@@ -180,8 +156,8 @@ def convert_raw_to_final(raw_context: ContextEnumerationRaw) -> ContextEnumerati
         entry_points=entry_points,
         assets=assets,
         assumptions=raw_context.assumptions,
-        questions=[],  # Will be populated from request
-        answers=[]     # Will be populated from request
+        questions=raw_context.questions,
+        answers=raw_context.answers
     )
 
 # ### Supply Chain Questions

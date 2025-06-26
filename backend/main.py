@@ -53,8 +53,8 @@ async def ping() -> PingResponse:
     logger.debug(f"Ping response: {response}")
     return response
 
-@app.post("/context", response_model=ContextEnumeration, status_code=status.HTTP_200_OK)
-async def context(request: ContextRequest) -> ContextEnumeration:
+@app.post("/context", response_model=ContextEnumerationRaw, status_code=status.HTTP_200_OK)
+async def context(request: ContextRequest) -> ContextEnumerationRaw:
     """
     Enumerate a context preview.
     The context preview is a list of attackers, entry points, and assets associated with probabilities.
@@ -181,8 +181,119 @@ DFD:
         logger.error(f"Error in context endpoint after {processing_time:.2f}s: {str(e)}", exc_info=True)
         raise
 
+@app.post("/regenerate", response_model=ContextEnumeration, status_code=status.HTTP_200_OK)
+async def regenerate(request: ContextRegenerationRequest) -> ContextEnumeration:
+    """
+    Regenerate a context enumeration based on a regeneration request.
+    The LLM will iterate on the user-defined assumptions, attackers, entry points, and assets.
+    """
+    start_time = time.time()
+    logger.info("Regenerate endpoint called")
+    
+    try:
+        # Format the existing context to be included in the prompt
+        attackers_str = "\\n".join([f"- {a.description} (Skill: {a.skill_level.name}, Access: {a.access_level.name})" for a in request.attackers])
+        entry_points_str = "\\n".join([f"- {e.name}: {e.description}" for e in request.entry_points])
+        assets_str = "\\n".join([f"- {a.name}: {a.description}" for a in request.assets])
+        assumptions_str = "\\n".join([f"- {s}" for s in request.assumptions])
+
+        prompt = f"""### ROLE
+You are a senior security-threat-modeling analyst.
+
+### TASK
+Your task is to **review and refine** the provided security context, which was previously generated and reviewed.
+Based on the original DFD and the user-verified context below, improve the list of attackers, entry points, assets, and assumptions.
+You can add, remove, or modify items to enhance the quality, accuracy, and completeness of the threat model. Note that
+you may add assumptions, but you should assume existing assumptions are correct.
+
+### PREVIOUSLY VERIFIED CONTEXT
+**Attackers:**
+{attackers_str}
+
+**Entry Points:**
+{entry_points_str}
+
+**Assets:**
+{assets_str}
+
+**Assumptions:**
+{assumptions_str}
+
+### ORIGINAL DFD
+{request.textual_dfd}
+
+### SCHEMA (strict)
+class Likert(IntEnum):      # 1 = very_low … 5 = very_high
+    very_low = 1
+    low = 2
+    medium = 3
+    high = 4
+    very_high = 5
+
+class Attacker:
+    description: str        # one concise sentence
+    skill_level: Likert     # attacker sophistication
+    access_level: Likert    # existing proximity / privileges
+    prob_of_attack: float   # 0.0 - 1.0 likelihood this attacker attempts an attack
+
+class EntryPoint:
+    name: str               # short label (<6 words)
+    description: str        # what this interface is / does
+    prob_of_entry: float    # 0.0 - 1.0 likelihood this entry is tried
+    difficulty_of_entry: Likert   # ease for attacker (1 = trivial → 5 = nearly impossible)
+
+class Asset:
+    name: str               # short component / data name
+    description: str        # why it matters
+    failure_modes: list[str] # at least 2 distinct ways it can fail or be harmed
+
+### OUTPUT FORMAT (MUST BE VALID JSON)
+{{
+  "attackers": [Attacker, ...],
+  "entry_points": [EntryPoint, ...],
+  "assets": [Asset, ...],
+  "assumptions": [string, ...],
+  "questions": [string, ...],
+  "answers": [string, ...],
+}}
+
+CRITICAL: Output ONLY the JSON object. Use empty lists where appropriate.
+"""
+        
+        logger.info("Initializing LLM client for regeneration")
+        llm = LLMClient(ModelType.LOCAL_LM_STUDIO)
+        response_schema = ContextEnumeration.model_json_schema()
+        messages = [
+            {"role": "system", "content": "You are a senior security-threat-modeling analyst."},
+            {"role": "user", "content": prompt}
+        ]
+        
+        logger.info("Sending request to LLM for regeneration")
+        json_str = llm.chat_completion_json(
+            messages=messages,
+            temperature=0.2, # Allow for some creativity in refinement
+            response_schema=response_schema
+        )
+        
+        logger.info("Received regenerated response from LLM, parsing...")
+        result = ContextEnumeration.model_validate_json(json_str)
+        
+        # Add questions and answers from the request (if not already present)
+        result.questions = request.questions
+        result.answers = request.answers
+        
+        processing_time = time.time() - start_time
+        logger.info(f"Regenerate endpoint completed successfully in {processing_time:.2f}s")
+        
+        return result
+        
+    except Exception as e:
+        processing_time = time.time() - start_time
+        logger.error(f"Error in regenerate endpoint after {processing_time:.2f}s: {str(e)}", exc_info=True)
+        raise
+
 @app.post("/generate", response_model=ThreatEnumeration, status_code=status.HTTP_200_OK)
-async def generate(request: VerifiedContext) -> ThreatEnumeration:
+async def generate(request: ContextEnumeration) -> ThreatEnumeration:
     """
     Generate threat chains.
     """

@@ -18,8 +18,8 @@ export default function AttackersList({ attackers }: AttackersListProps) {
 
   return (
     <div className="space-y-4">
-      {attackers.map((attacker) => (
-        <Card key={attacker.id}>
+      {attackers.map((attacker, index) => (
+        <Card key={attacker.id || `${attacker.description}-${index}`}>
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">{attacker.description}</CardTitle>
           </CardHeader>

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ContextEnumeration, Likert, ReviewStatus, AttackerProfileRanking, EntryPointRanking, AssetValueRanking } from '@/lib/api';
+import { ApiService, ContextEnumeration, Likert, ContextRegenerationRequest, Attacker, EntryPoint, Asset } from '@/lib/api';
 import AttackersList from '@/components/attackers-list';
 import EntryPointsList from '@/components/entry-points-list';
 import AssetsList from '@/components/assets-list';
@@ -14,74 +14,48 @@ import { toast } from 'sonner';
 export default function ContextResultsPage() {
   const router = useRouter();
   const [contextData, setContextData] = useState<ContextEnumeration | null>(null);
-  const [verificationComplete, setVerificationComplete] = useState(false);
-  const [reviewer, setReviewer] = useState<string>('');
+  const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    // Load context data from session storage
     const storedData = sessionStorage.getItem('contextEnumeration');
-    
     if (storedData) {
-      try {
-        const parsedData = JSON.parse(storedData);
-        setContextData(parsedData);
-      } catch (error) {
-        console.error('Error parsing context data:', error);
-        toast.error('Failed to load context data. Please try again.');
-        router.push('/context');
-      }
+      setContextData(JSON.parse(storedData));
     } else {
-      // No data found, redirect to context page
       toast.error('No context data found. Please submit a new request.');
       router.push('/context');
     }
   }, [router]);
 
-  const handleVerify = () => {
-    if (!contextData || !reviewer) {
-      toast.error('Please enter a reviewer name before continuing');
+  const handleRegenerate = async () => {
+    if (!contextData) {
+      toast.error('No context data to regenerate.');
       return;
     }
 
-    // Transform context data into verified context
-    const attackerRankings: AttackerProfileRanking[] = contextData.attackers.map(attacker => ({
-      attacker_id: attacker.id,
-      threat_level: Likert.MEDIUM, // Default value
-      reviewer: reviewer,
-      status: ReviewStatus.ACCEPTED
-    }));
-
-    const entryPointRankings: EntryPointRanking[] = contextData.entry_points.map(entry => ({
-      entry_id: entry.id,
-      likelihood: Likert.MEDIUM, // Default value
-      reviewer: reviewer,
-      status: ReviewStatus.ACCEPTED
-    }));
-
-    const assetRankings: AssetValueRanking[] = contextData.assets.map(asset => ({
-      asset_id: asset.id,
-      value: Likert.MEDIUM, // Default value
-      reviewer: reviewer,
-      status: ReviewStatus.ACCEPTED
-    }));
-
-    // Store verified context data for threats page
-    const textual_dfd = sessionStorage.getItem('contextRequest') 
-      ? JSON.parse(sessionStorage.getItem('contextRequest') || '{}').textual_dfd || ''
-      : '';
-
-    sessionStorage.setItem('verifiedContext', JSON.stringify({
-      textual_dfd: textual_dfd,
-      attackers: attackerRankings,
-      entry_points: entryPointRankings,
-      assets: assetRankings,
+    // Build the ContextRegenerationRequest from the current contextData
+    const regenRequest: ContextRegenerationRequest = {
+      textual_dfd: sessionStorage.getItem('contextRequest')
+        ? JSON.parse(sessionStorage.getItem('contextRequest') || '{}').textual_dfd || ''
+        : '',
+      attackers: contextData.attackers as Attacker[],
+      entry_points: contextData.entry_points as EntryPoint[],
+      assets: contextData.assets as Asset[],
       assumptions: contextData.assumptions,
       questions: contextData.questions,
       answers: contextData.answers,
-    }));
+    };
 
-    setVerificationComplete(true);
-    toast.success('Context verification completed!');
+    startTransition(async () => {
+      try {
+        const regeneratedData = await ApiService.regenerateContext(regenRequest);
+        setContextData(regeneratedData);
+        sessionStorage.setItem('contextEnumeration', JSON.stringify(regeneratedData));
+        toast.success('Context has been regenerated!');
+      } catch (error) {
+        toast.error('Failed to regenerate context. Please try again.');
+        console.error(error);
+      }
+    });
   };
 
   if (!contextData) {
@@ -97,31 +71,13 @@ export default function ContextResultsPage() {
     <div className="max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Context Results</h1>
-        
         <div className="flex items-center gap-4">
-          {!verificationComplete ? (
-            <>
-              <input
-                type="text"
-                placeholder="Reviewer name"
-                value={reviewer}
-                onChange={(e) => setReviewer(e.target.value)}
-                className="px-3 py-2 border rounded-md"
-              />
-              <Button onClick={handleVerify} disabled={!reviewer}>
-                Verify Context
-              </Button>
-            </>
-          ) : (
-            <div className="flex gap-4">
-              <Button variant="outline" onClick={() => router.push('/threats')}>
-                View Threat Model
-              </Button>
-              <Button onClick={() => router.push('/context')}>
-                New Analysis
-              </Button>
-            </div>
-          )}
+          <Button onClick={handleRegenerate} disabled={isPending}>
+            {isPending ? 'Regenerating...' : 'Regenerate'}
+          </Button>
+          <Button variant="outline" onClick={() => router.push('/threats')}>
+            View Threat Model
+          </Button>
         </div>
       </div>
 
@@ -132,22 +88,18 @@ export default function ContextResultsPage() {
           <TabsTrigger value="assets">Assets</TabsTrigger>
           <TabsTrigger value="assumptions">Assumptions</TabsTrigger>
         </TabsList>
-        
         <TabsContent value="attackers">
           <h2 className="text-xl font-semibold mb-4">Identified Attackers</h2>
           <AttackersList attackers={contextData.attackers} />
         </TabsContent>
-        
         <TabsContent value="entry-points">
           <h2 className="text-xl font-semibold mb-4">Identified Entry Points</h2>
           <EntryPointsList entryPoints={contextData.entry_points} />
         </TabsContent>
-        
         <TabsContent value="assets">
           <h2 className="text-xl font-semibold mb-4">Identified Assets</h2>
           <AssetsList assets={contextData.assets} />
         </TabsContent>
-        
         <TabsContent value="assumptions">
           <h2 className="text-xl font-semibold mb-4">Key Assumptions</h2>
           <AssumptionsList assumptions={contextData.assumptions} />
