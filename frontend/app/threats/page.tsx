@@ -4,45 +4,59 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ApiService, ThreatChain, ThreatEnumeration, VerifiedContext } from "@/lib/api";
+import { ApiService, ContextEnumeration, ThreatChain, ContextRegenerationRequest } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function ThreatsPage() {
   const router = useRouter();
-  const [verifiedContext, setVerifiedContext] = useState<VerifiedContext | null>(null);
+  const [contextData, setContextData] = useState<ContextEnumeration | null>(null);
   const [threatChains, setThreatChains] = useState<ThreatChain[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
 
   useEffect(() => {
-    // Load verified context from session storage
-    const storedContext = sessionStorage.getItem('verifiedContext');
+    // Load context data from session storage
+    const storedContext = sessionStorage.getItem('contextEnumeration');
     
     if (storedContext) {
       try {
         const parsedContext = JSON.parse(storedContext);
-        setVerifiedContext(parsedContext);
+        setContextData(parsedContext);
       } catch (error) {
-        console.error('Error parsing verified context:', error);
-        toast.error('Failed to load verified context. Please go back and verify context first.');
+        console.error('Error parsing context data:', error);
+        toast.error('Failed to load context data. Please go back and create context first.');
         router.push('/context');
       }
     } else {
       // No data found, redirect to context page
-      toast.error('No verified context found. Please submit and verify context first.');
+      toast.error('No context data found. Please submit context first.');
       setTimeout(() => router.push('/context'), 2000);
     }
   }, [router]);
 
   const generateThreats = async () => {
-    if (!verifiedContext) {
-      toast.error("Verified context is required to generate threats");
+    if (!contextData) {
+      toast.error("Context data is required to generate threats");
       return;
     }
 
+    const textualDfd = sessionStorage.getItem('contextRequest')
+      ? JSON.parse(sessionStorage.getItem('contextRequest') || '{}').textual_dfd || ''
+      : '';
+      
+    const request: ContextRegenerationRequest = {
+      textual_dfd: textualDfd,
+      attackers: contextData.attackers,
+      entry_points: contextData.entry_points,
+      assets: contextData.assets,
+      assumptions: contextData.assumptions,
+      questions: contextData.questions,
+      answers: contextData.answers,
+    };
+
     setIsLoading(true);
     try {
-      const response = await ApiService.generateThreats(verifiedContext);
+      const response = await ApiService.generateThreats(request);
       setThreatChains(response.threat_chains);
       setHasGenerated(true);
       toast.success("Threat chains generated successfully!");
@@ -54,12 +68,12 @@ export default function ThreatsPage() {
     }
   };
 
-  if (!verifiedContext) {
+  if (!contextData) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite] mr-2"></div>
-          <span>Loading verified context...</span>
+          <span>Loading context data...</span>
         </div>
       </div>
     );
@@ -155,7 +169,7 @@ export default function ThreatsPage() {
           <CardHeader>
             <CardTitle>Ready to Generate Threats</CardTitle>
             <CardDescription>
-              Click the "Generate Threat Chains" button to analyze the verified context and identify potential threat chains.
+              Click the &quot;Generate Threat Chains&quot; button to analyze the context and identify potential threat chains.
             </CardDescription>
           </CardHeader>
           <CardContent>

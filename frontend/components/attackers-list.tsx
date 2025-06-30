@@ -1,4 +1,4 @@
-import { Attacker, Likert } from "@/lib/api";
+import { Attacker } from "@/lib/api";
 import { getLikertLabel, formatProbability } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";

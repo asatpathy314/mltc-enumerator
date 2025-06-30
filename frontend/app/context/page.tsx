@@ -78,7 +78,7 @@ export default function ContextPage() {
         <CardHeader>
           <CardTitle>Data Flow Diagram Description</CardTitle>
           <CardDescription>
-            Provide a detailed description of your system's data flow diagram
+            Provide a detailed description of your system&apos;s data flow diagram
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -92,7 +92,7 @@ export default function ContextPage() {
                     <FormLabel>Data Flow Diagram Description</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Describe your system's data flow diagram..."
+                        placeholder="Describe your system&apos;s data flow diagram..."
                         className="min-h-[200px]"
                         {...field}
                       />

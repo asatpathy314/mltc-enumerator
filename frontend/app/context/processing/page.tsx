@@ -3,10 +3,10 @@
 import { ApiService, ContextEnumeration, ContextRequest } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { toast } from "sonner";
 
-export default function ContextProcessingPage() {
+function ProcessingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const dataParam = searchParams.get("data");
@@ -21,7 +21,7 @@ export default function ContextProcessingPage() {
     }
   }, [requestData]);
 
-  const { data, error, isLoading, isError } = useQuery<ContextEnumeration>({
+  const { data, error, isError } = useQuery<ContextEnumeration>({
     queryKey: ["context", requestData],
     queryFn: async () => {
       if (!requestData) {
@@ -51,7 +51,7 @@ export default function ContextProcessingPage() {
         <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite] mb-6"></div>
         <h2 className="text-2xl font-bold mb-4">Processing Your Context</h2>
         <p className="text-muted-foreground mb-8 max-w-md">
-          We're analyzing your data flow diagram to identify attackers, entry points, and assets. This may take 30-60 seconds.
+          We&apos;re analyzing your data flow diagram to identify attackers, entry points, and assets. This may take 30-60 seconds.
         </p>
         
         {isError && (
@@ -67,5 +67,25 @@ export default function ContextProcessingPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// Loading fallback for the Suspense boundary
+function LoadingFallback() {
+  return (
+    <div className="flex flex-col items-center justify-center h-[60vh]">
+      <div className="text-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite] mb-6"></div>
+        <h2 className="text-2xl font-bold mb-4">Initializing...</h2>
+      </div>
+    </div>
+  );
+}
+
+export default function ContextProcessingPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ProcessingContent />
+    </Suspense>
   );
 } 

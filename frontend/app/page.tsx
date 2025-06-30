@@ -22,7 +22,7 @@ export default function Home() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p>
-              Provide a textual description of your system's data flow diagram and get an automated analysis
+              Provide a textual description of your system&apos;s data flow diagram and get an automated analysis
               of potential security threats.
             </p>
             <div className="flex justify-end">

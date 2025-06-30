@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/lib/providers";
+import Link from "next/link";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,9 +36,9 @@ export default function RootLayout({
                 <nav className="flex items-center justify-between">
                   <div className="font-semibold text-xl">MLTC Enumerator</div>
                   <div className="flex gap-4">
-                    <a href="/" className="hover:underline">Home</a>
-                    <a href="/context" className="hover:underline">Context</a>
-                    <a href="/threats" className="hover:underline">Threats</a>
+                    <Link href="/" className="hover:underline">Home</Link>
+                    <Link href="/context" className="hover:underline">Context</Link>
+                    <Link href="/threats" className="hover:underline">Threats</Link>
                   </div>
                 </nav>
               </div>
