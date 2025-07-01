@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PlusCircle } from "lucide-react";
 import { Label } from "@/components/ui/label";
@@ -19,6 +18,12 @@ export default function EditableQuestionsList({
   // Local copies for editing
   const [editingQuestions, setEditingQuestions] = useState<string[]>([...questions]);
   const [editingAnswers, setEditingAnswers] = useState<string[]>([...answers]);
+
+  // Sync local state with props when they change (e.g., after a router.refresh())
+  useEffect(() => {
+    setEditingQuestions([...questions]);
+    setEditingAnswers([...answers]);
+  }, [questions, answers]);
 
   const handleQuestionChange = (index: number, value: string) => {
     const updated = [...editingQuestions];
@@ -48,11 +53,12 @@ export default function EditableQuestionsList({
         <div key={index} className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor={`question-${index}`}>{`Question ${index + 1}`}</Label>
-            <Input
+            <Textarea
               id={`question-${index}`}
               value={q}
               onChange={(e) => handleQuestionChange(index, e.target.value)}
               placeholder="Enter question..."
+              rows={2}
             />
           </div>
           <div className="grid gap-2">

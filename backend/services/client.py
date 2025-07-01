@@ -156,33 +156,13 @@ class LLMClient:
                 
                 # Remove "thinking" tags and their content (e.g., <think> ... </think>)
                 cleaned_content = re.sub(r'<think>[\s\S]*?</think>', '', content, flags=re.IGNORECASE)
-                return cleaned_content
-                # Iterate through brace blocks and return the first valid JSON
-                json_candidate = None
-                for match in re.finditer(r'\{[\s\S]*?\}', cleaned_content):
-                    candidate = match.group(0)
-                    try:
-                        json.loads(candidate)
-                        json_candidate = candidate
-                        break
-                    except Exception:
-                        continue
+                logger.debug(f"Extracted response length: {len(cleaned_content)} characters")
+                logger.debug(f"Extracted response raw: {cleaned_content}...")
 
-                if json_candidate:
-                    logger.info("Successfully extracted JSON from response")
-                    logger.debug(f"Extracted JSON length: {len(json_candidate)} characters")
-                    logger.debug(f"Extracted JSON preview: {json_candidate[:300]}...")
+                total_time = time.time() - start_time
+                logger.info(f"Chat completion completed successfully in {total_time:.2f}s")
 
-                    total_time = time.time() - start_time
-                    logger.info(f"Chat completion completed successfully in {total_time:.2f}s")
-                    return json_candidate
-                else:
-                    logger.warning("No JSON found in response, returning full content")
-                    logger.debug(f"Full content: {content}")
-                    total_time = time.time() - start_time
-                    logger.info(f"Chat completion completed (fallback) in {total_time:.2f}s")
-                    return content
-                    
+                return cleaned_content  
             else:
                 # For other model types, implement their specific logic
                 logger.error(f"Chat completion not implemented for {self.model_type.value}")

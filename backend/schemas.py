@@ -68,6 +68,27 @@ class ThreatChain(BaseModel):
 class ThreatEnumeration(BaseModel):
     threat_chains: List[ThreatChain]
 
+# --------- New: DFD Refinement ----------
+class DFDRefinementRequest(BaseModel):
+    """Client → server payload for refining a textual DFD."""
+    textual_dfd: str
+    questions: List[str] = []
+    answers: List[str] = []
+
+
+class DFDRefinementResponse(BaseModel):
+    """Server → client payload.
+
+    If ``questions`` is non-empty, the LLM needs more information.
+    When the LLM believes the DFD is sufficiently refined it returns an
+    updated ``textual_dfd`` with an empty ``questions`` list and sets
+    ``message`` to "success".
+    """
+
+    textual_dfd: str
+    questions: List[str]
+    message: str  # "need_more_info" | "success"
+
 # ### Supply Chain Questions
 # Where's this model coming from?
 # What's the model trained on?

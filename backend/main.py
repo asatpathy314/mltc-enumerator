@@ -288,3 +288,80 @@ async def generate(request: ContextEnumeration) -> ThreatEnumeration:
         processing_time = time.time() - start_time
         logger.error(f"Error in generate endpoint after {processing_time:.2f}s: {str(e)}", exc_info=True)
         raise
+
+@app.post("/dfd/refine", response_model=DFDRefinementResponse, status_code=status.HTTP_200_OK)
+async def refine_dfd(request: DFDRefinementRequest) -> DFDRefinementResponse:
+    """Interactive refinement loop for a textual Data-Flow Diagram (DFD).
+
+    Workflow:
+    1. Client sends the initial DFD with *no* answers ⇒ the LLM returns clarifying questions.
+    2. Client answers and re-posts ⇒ LLM either asks follow-up questions (message="need_more_info")
+       or returns an improved DFD with message="success" and an empty question list.
+    """
+    start_time = time.time()
+    logger.info("DFD refinement endpoint called")
+
+    try:
+        llm = LLMClient(ModelType.LOCAL_LM_STUDIO)
+
+        first_round = not request.answers  # no answers yet
+
+        if first_round:
+            prompt = f"""You are a senior security-threat-modeling analyst.
+We have the following data-flow diagram description (possibly incomplete or ambiguous):
+
+{request.textual_dfd}
+
+Your task: ask concise *clarifying questions* (1-5) that will help you fully understand and improve the DFD. Use the following JSON format only:
+{{
+  "questions": ["...", "...", ...]
+}}
+CRITICAL: Output ONLY the JSON object. ENSURE THAT THE FORMAT IS FOLLOWED EXACTLY. Use empty lists where appropriate."""
+            response_schema = {"type": "object", "properties": {"questions": {"type": "array", "items": {"type": "string"}}}}
+            messages = [{"role": "user", "content": prompt}]
+            json_str = llm.chat_completion_json(messages=messages, temperature=0.0, response_schema=response_schema)
+            data = json.loads(json_str)
+            questions = data.get("questions", [])
+            result = DFDRefinementResponse(
+                textual_dfd=request.textual_dfd,
+                questions=questions,
+                message="need_more_info",
+            )
+            return result
+
+        # ========= answer refinement =========
+        qa_pairs = "\n".join([f"Q{i+1}: {q}\nA{i+1}: {a}" for i, (q, a) in enumerate(zip(request.questions, request.answers))])
+        prompt = f"""You are a senior security-threat-modeling analyst.
+Below is the current DFD description and the user's answers to your previous questions. If you still need information, ask new questions. Otherwise, return an improved *textual DFD* in the required JSON format.
+
+CURRENT DFD:
+{request.textual_dfd}
+
+USER Q&A:
+{qa_pairs}
+
+### OUTPUT OPTIONS (choose one)
+1. Needs more info ⇒
+{{
+  "questions": ["...", "..."],
+  "message": "need_more_info"
+}}
+2. Satisfied ⇒
+{{
+  "textual_dfd": "<refined DFD>",
+  "questions": [],
+  "message": "success"
+}}
+CRITICAL: Output ONLY the JSON object. ENSURE THAT THE FORMAT IS FOLLOWED EXACTLY. Use empty lists where appropriate."""
+        response_schema = DFDRefinementResponse.model_json_schema()
+        messages = [{"role": "user", "content": prompt}]
+        json_str = llm.chat_completion_json(messages=messages, temperature=0.0, response_schema=response_schema)
+        result = DFDRefinementResponse.model_validate_json(json_str)
+        processing_time = time.time() - start_time
+        logger.info(f"DFD refinement completed in {processing_time:.2f}s with message={result.message}")
+        return result
+
+    except Exception as e:
+        processing_time = time.time() - start_time
+        logger.error(f"Error in refine_dfd after {processing_time:.2f}s: {str(e)}", exc_info=True)
+        raise

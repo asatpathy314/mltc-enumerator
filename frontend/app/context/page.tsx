@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EnumerateRequest } from "@/lib/api";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -25,17 +25,29 @@ export default function ContextPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Initialize with two empty Q&A fields
-  const defaultValues: Partial<ContextFormValues> = {
+  const [defaultValues, setDefaultValues] = useState<Partial<ContextFormValues>>({
     textual_dfd: "",
     extra_prompt: "",
     questions: ["", ""],
     answers: ["", ""],
-  };
+  });
+
+  useEffect(() => {
+    const prefill = sessionStorage.getItem("contextPrefillDfd");
+    if (prefill) {
+      setDefaultValues((prev) => ({ ...prev, textual_dfd: prefill }));
+    }
+  }, []);
 
   const form = useForm<ContextFormValues>({
     resolver: zodResolver(contextFormSchema),
     defaultValues,
   });
+
+  // reset when prefill updated
+  useEffect(() => {
+    form.reset(defaultValues as ContextFormValues);
+  }, [defaultValues, form]);
 
   const onSubmit = async (values: ContextFormValues) => {
     setIsSubmitting(true);

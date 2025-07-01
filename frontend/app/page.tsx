@@ -27,7 +27,7 @@ export default function Home() {
             </p>
             <div className="flex justify-end">
               <Button asChild>
-                <Link href="/context">Start Enumeration</Link>
+                <Link href="/dfd">Start Enumeration</Link>
               </Button>
             </div>
           </CardContent>
