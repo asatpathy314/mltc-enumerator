@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ApiService, ContextEnumeration, ThreatChain, ContextRegenerationRequest } from "@/lib/api";
+import { ApiService, ContextEnumeration, ThreatChain, EnumerateRequest } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function ThreatsPage() {
@@ -44,14 +44,9 @@ export default function ThreatsPage() {
       ? JSON.parse(sessionStorage.getItem('contextRequest') || '{}').textual_dfd || ''
       : '';
       
-    const request: ContextRegenerationRequest = {
+    const request: EnumerateRequest = {
+      ...contextData,
       textual_dfd: textualDfd,
-      attackers: contextData.attackers,
-      entry_points: contextData.entry_points,
-      assets: contextData.assets,
-      assumptions: contextData.assumptions,
-      questions: contextData.questions,
-      answers: contextData.answers,
     };
 
     setIsLoading(true);

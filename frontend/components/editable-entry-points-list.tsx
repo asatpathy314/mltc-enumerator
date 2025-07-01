@@ -62,7 +62,7 @@ export default function EditableEntryPointsList({
 
   const handleAddEntryPoint = () => {
     const newEntryPoint: EntryPoint = {
-      id: `new-entry-point-${Date.now()}`, // Temporary ID
+      id: crypto.randomUUID(),
       name: "New Entry Point",
       description: "Description of entry point",
       prob_of_entry: 0.5,

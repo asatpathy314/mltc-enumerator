@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ApiService, ContextEnumeration, ContextRegenerationRequest, Attacker, EntryPoint, Asset } from '@/lib/api';
+import { ApiService, ContextEnumeration, EnumerateRequest, Attacker, EntryPoint, Asset } from '@/lib/api';
 import { deepClone } from '@/lib/utils';
 import EditableAttackersList from '@/components/editable-attackers-list';
 import EditableEntryPointsList from '@/components/editable-entry-points-list';
@@ -85,22 +85,17 @@ export default function ContextResultsPage() {
       return;
     }
 
-    // Build the ContextRegenerationRequest from the edited context data
-    const regenRequest: ContextRegenerationRequest = {
-      textual_dfd: sessionStorage.getItem('contextRequest')
+    // Build the request payload for regeneration (same schema as enumeration)
+    const regenRequest: EnumerateRequest = {
+      ...editedContext,
+      textual_dfd: editedContext.textual_dfd || (sessionStorage.getItem('contextRequest')
         ? JSON.parse(sessionStorage.getItem('contextRequest') || '{}').textual_dfd || ''
-        : '',
-      attackers: editedContext.attackers,
-      entry_points: editedContext.entry_points,
-      assets: editedContext.assets,
-      assumptions: editedContext.assumptions,
-      questions: editedContext.questions,
-      answers: editedContext.answers,
+        : ''),
     };
 
     startTransition(async () => {
       try {
-        const regeneratedData = await ApiService.regenerateContext(regenRequest);
+        const regeneratedData = await ApiService.enumerateContext(regenRequest);
         setContextData(regeneratedData);
         setEditedContext(deepClone(regeneratedData));
         sessionStorage.setItem('contextEnumeration', JSON.stringify(regeneratedData));

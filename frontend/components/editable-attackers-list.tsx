@@ -62,7 +62,7 @@ export default function EditableAttackersList({
 
   const handleAddAttacker = () => {
     const newAttacker: Attacker = {
-      id: `new-attacker-${Date.now()}`, // Temporary ID
+      id: crypto.randomUUID(),
       description: "New attacker",
       skill_level: Likert.MEDIUM,
       access_level: Likert.MEDIUM,

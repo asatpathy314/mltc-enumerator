@@ -1,6 +1,6 @@
 "use client";
 
-import { ApiService, ContextEnumeration, ContextRequest } from "@/lib/api";
+import { ApiService, ContextEnumeration, EnumerateRequest } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, Suspense } from "react";
@@ -12,7 +12,7 @@ function ProcessingContent() {
   const dataParam = searchParams.get("data");
   
   // Parse the request data from URL params
-  const requestData: ContextRequest = dataParam ? JSON.parse(dataParam) : null;
+  const requestData: EnumerateRequest = dataParam ? JSON.parse(dataParam) : null;
   
   // Store the request data in sessionStorage for later use
   useEffect(() => {
@@ -27,7 +27,7 @@ function ProcessingContent() {
       if (!requestData) {
         throw new Error("No request data provided");
       }
-      return await ApiService.getContext(requestData);
+      return await ApiService.enumerateContext(requestData);
     },
     enabled: !!requestData,
     retry: 1,

@@ -88,7 +88,7 @@ export default function EditableAssetsList({
 
   const handleAddAsset = () => {
     const newAsset: Asset = {
-      id: `new-asset-${Date.now()}`, // Temporary ID
+      id: crypto.randomUUID(),
       name: "New Asset",
       description: "Description of asset",
       failure_modes: ["Failure mode 1", "Failure mode 2"]

@@ -7,6 +7,7 @@ import time
 import requests
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
@@ -153,17 +154,28 @@ class LLMClient:
                 logger.debug(f"Raw response length: {len(content)} characters")
                 logger.debug(f"Raw response preview: {content[:500]}...")
                 
-                # Handle DeepSeek R1 thinking tags - extract JSON from response
-                json_match = re.search(r'\{[\s\S]*\}', content)
-                if json_match:
-                    json_str = json_match.group(0)
+                # Remove "thinking" tags and their content (e.g., <think> ... </think>)
+                cleaned_content = re.sub(r'<think>[\s\S]*?</think>', '', content, flags=re.IGNORECASE)
+                return cleaned_content
+                # Iterate through brace blocks and return the first valid JSON
+                json_candidate = None
+                for match in re.finditer(r'\{[\s\S]*?\}', cleaned_content):
+                    candidate = match.group(0)
+                    try:
+                        json.loads(candidate)
+                        json_candidate = candidate
+                        break
+                    except Exception:
+                        continue
+
+                if json_candidate:
                     logger.info("Successfully extracted JSON from response")
-                    logger.debug(f"Extracted JSON length: {len(json_str)} characters")
-                    logger.debug(f"Extracted JSON preview: {json_str[:300]}...")
-                    
+                    logger.debug(f"Extracted JSON length: {len(json_candidate)} characters")
+                    logger.debug(f"Extracted JSON preview: {json_candidate[:300]}...")
+
                     total_time = time.time() - start_time
                     logger.info(f"Chat completion completed successfully in {total_time:.2f}s")
-                    return json_str
+                    return json_candidate
                 else:
                     logger.warning("No JSON found in response, returning full content")
                     logger.debug(f"Full content: {content}")

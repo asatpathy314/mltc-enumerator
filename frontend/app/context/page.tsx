@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ContextRequest } from "@/lib/api";
+import { EnumerateRequest } from "@/lib/api";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -44,10 +44,14 @@ export default function ContextPage() {
       const filteredQuestions = values.questions.filter(q => q.trim() !== '');
       const filteredAnswers = values.answers.filter(a => a.trim() !== '');
       
-      // Create request payload
-      const request: ContextRequest = {
+      // Create request payload (empty context for initial enumeration)
+      const request: EnumerateRequest = {
         textual_dfd: values.textual_dfd,
         extra_prompt: values.extra_prompt,
+        attackers: [],
+        entry_points: [],
+        assets: [],
+        assumptions: [],
         questions: filteredQuestions,
         answers: filteredAnswers,
       };
