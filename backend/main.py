@@ -112,15 +112,15 @@ class Likert(IntEnum):      # 1 = very_low ... 5 = very_high
 
 class Attacker:
     description: str
-    skill_level: Likert
-    access_level: Likert
-    prob_of_attack: float   # 0.0 – 1.0
+    skill_level: int  # Likert scale [1, 5]
+    access_level: int  # Likert scale [1, 5]
+    prob_of_attack: float
 
 class EntryPoint:
     name: str
     description: str
     prob_of_entry: float
-    difficulty_of_entry: Likert
+    difficulty_of_entry: int  # Likert scale [1, 5]
 
 class Asset:
     name: str
@@ -137,7 +137,7 @@ class Asset:
   "answers": [string, ...]
 }}
 
-CRITICAL: Output ONLY the JSON object. Start with {{ and end with }}.
+CRITICAL: Output ONLY the JSON object. ENSURE THAT THE FORMAT IS FOLLOWED EXACTLY. Use empty lists where appropriate.
 
 ### INPUT
 DFD:
@@ -187,15 +187,15 @@ class Likert(IntEnum):      # 1 = very_low … 5 = very_high
 
 class Attacker:
     description: str
-    skill_level: Likert
-    access_level: Likert
+    skill_level: int  # Likert scale [1, 5]
+    access_level: int  # Likert scale [1, 5]
     prob_of_attack: float
 
 class EntryPoint:
     name: str
     description: str
     prob_of_entry: float
-    difficulty_of_entry: Likert
+    difficulty_of_entry: int  # Likert scale [1, 5]
 
 class Asset:
     name: str
@@ -212,10 +212,15 @@ class Asset:
   "answers": [string, ...]
 }}
 
-CRITICAL: Output ONLY the JSON object. Use empty lists where appropriate.
+CRITICAL: Output ONLY the JSON object. ENSURE THAT THE FORMAT IS FOLLOWED EXACTLY. Use empty lists where appropriate.
+
+### INPUT
+DFD:
+{request.textual_dfd}{_build_hint_section()}{_build_qa_section()}
 """
 
-        logger.debug(f"Prompt length: {len(prompt)} characters")
+        logger.info(f"Prompt length: {len(prompt)} characters")
+        logger.debug(f"Prompt: {prompt}")
 
         # ----------------
         # Call the LLM
@@ -244,8 +249,8 @@ CRITICAL: Output ONLY the JSON object. Use empty lists where appropriate.
         result = ContextEnumeration.model_validate(data)
 
         # Preserve Q&A arrays in case LLM dropped them
-        result.questions = request.questions or []
-        result.answers = request.answers or []
+        # result.questions = request.questions or []
+        # result.answers = request.answers or []
 
         processing_time = time.time() - start_time
         logger.info(f"Enumerate endpoint completed successfully in {processing_time:.2f}s")
