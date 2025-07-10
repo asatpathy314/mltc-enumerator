@@ -513,33 +513,72 @@ This will help me identify potential ML-specific threat vectors."""
                 # Sufficient information gathered - prepare Q&A for context enumeration
                 logger.info("Sufficient information gathered, preparing Q&A for context enumeration")
                 
-                # Extract questions and answers from the conversation
+                # Use LLM to extract proper Q&A pairs from the conversation
                 questions = []
                 answers = []
                 
-                # Get all assistant questions and user responses from conversation
-                conversation = request.conversation_history
-                for i in range(0, len(conversation) - 1, 2):
-                    if (i < len(conversation) and 
-                        conversation[i].role == "assistant" and 
-                        i + 1 < len(conversation) and 
-                        conversation[i + 1].role == "user"):
-                        
-                        # Extract questions from assistant message
-                        assistant_msg = conversation[i].content
-                        user_response = conversation[i + 1].content
-                        
-                        # Simple question extraction (look for numbered questions)
-                        import re
-                        question_matches = re.findall(r'\d+\.\s*(.+?)(?=\n\d+\.|$)', assistant_msg, re.DOTALL)
-                        if question_matches:
-                            for question in question_matches:
-                                questions.append(question.strip())
-                                answers.append(user_response.strip())
-                        else:
-                            # If no numbered questions, treat whole assistant message as one question
-                            questions.append(assistant_msg.strip())
-                            answers.append(user_response.strip())
+                # Build conversation context for extraction
+                conversation_text = ""
+                for msg in request.conversation_history:
+                    role_label = "Assistant" if msg.role == "assistant" else "User"
+                    conversation_text += f"\n\n{role_label}: {msg.content}"
+                
+                # LLM-powered Q&A extraction
+                qa_extraction_prompt = f"""### ROLE
+You are an expert at extracting structured Q&A pairs from conversations.
+
+### TASK
+Extract individual questions and their corresponding answers from this ML security conversation. 
+Each question should be paired with its specific answer, not the entire user response.
+
+### CONVERSATION
+{conversation_text}
+
+### EXTRACTION RULES
+1. Extract only the security-relevant questions asked by the Assistant
+2. Extract only the specific answers that respond to each question
+3. If a user provides multiple numbered answers, pair each with the corresponding question
+4. Clean up questions to remove conversational fluff
+5. Keep answers concise but complete
+
+### OUTPUT FORMAT
+{{
+  "qa_pairs": [
+    {{
+      "question": "Clean, specific question text",
+      "answer": "Specific answer to this question only"
+    }}
+  ]
+}}
+
+CRITICAL: Output ONLY valid JSON. Extract actual Q&A pairs, not entire messages."""
+                
+                messages = [
+                    {"role": "system", "content": "You are an expert at extracting structured information."},
+                    {"role": "user", "content": qa_extraction_prompt}
+                ]
+                
+                try:
+                    qa_extraction_response = llm.chat_completion_json(
+                        messages=messages,
+                        temperature=0.0,
+                        response_schema={}
+                    )
+                    
+                    qa_data = json.loads(qa_extraction_response)
+                    logger.debug(f"Q&A extraction result: {qa_data}")
+                    
+                    # Extract questions and answers from LLM response
+                    for qa_pair in qa_data.get("qa_pairs", []):
+                        if "question" in qa_pair and "answer" in qa_pair:
+                            questions.append(qa_pair["question"].strip())
+                            answers.append(qa_pair["answer"].strip())
+                            
+                except Exception as e:
+                    logger.warning(f"Failed to extract Q&A pairs with LLM: {e}")
+                    # Fallback: just use the raw conversation as single Q&A
+                    questions.append("Security assessment conversation")
+                    answers.append(conversation_text.strip())
                 
                 return ChatRefinementResponse(
                     message="success",
