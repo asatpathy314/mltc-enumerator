@@ -287,83 +287,279 @@ async def generate(request: ContextEnumeration) -> ThreatEnumeration:
         processing_time = time.time() - start_time
         logger.error(f"Error in generate endpoint after {processing_time:.2f}s: {str(e)}", exc_info=True)
         raise
-
-@app.post("/dfd/refine", response_model=DFDRefinementResponse, status_code=status.HTTP_200_OK)
-async def refine_dfd(request: DFDRefinementRequest) -> DFDRefinementResponse:
-    """Interactive refinement loop for a textual Data-Flow Diagram (DFD).
-
-    Workflow:
-    1. Client sends the initial DFD with *no* answers ⇒ the LLM returns clarifying questions.
-    2. Client answers and re-posts ⇒ LLM either asks follow-up questions (message="need_more_info")
-       or returns an improved DFD with message="success" and an empty question list.
+@app.post("/refine", response_model=ChatRefinementResponse, status_code=status.HTTP_200_OK)
+async def refine_with_chat(request: ChatRefinementRequest) -> ChatRefinementResponse:
+    """
+    ML-aware chat interface for DFD refinement.
+    
+    This endpoint replaces /dfd/refine with an intelligent conversation that:
+    1. Analyzes the DFD for potential ML attack vectors
+    2. Asks targeted questions about specific ML security concerns
+    3. Extracts structured answers from natural language responses
+    4. Determines when enough information has been gathered
     """
     start_time = time.time()
-    logger.info("DFD refinement endpoint called")
-
+    logger.info("Chat refinement endpoint called")
+    logger.debug(f"DFD length: {len(request.textual_dfd)}, conversation history: {len(request.conversation_history)} messages")
+    
     try:
         llm = LLMClient(ModelType.LOCAL_LM_STUDIO)
+        
+        # ML Attack Knowledge Base - areas to investigate
+        ml_attack_knowledge = {
+            "data_poisoning": {
+                "keywords": ["training data", "dataset", "data source", "training pipeline"],
+                "questions": [
+                    "Where does your training data come from and how is it validated?",
+                    "What controls prevent malicious data from entering your training pipeline?",
+                    "How do you verify the integrity of your training datasets?"
+                ]
+            },
+            "model_stealing": {
+                "keywords": ["model access", "api", "inference", "model weights"],
+                "questions": [
+                    "Who has access to your model weights or architecture details?",
+                    "How is access to your model inference API controlled?",
+                    "What information is returned by your model's prediction endpoints?"
+                ]
+            },
+            "adversarial_examples": {
+                "keywords": ["input validation", "preprocessing", "robustness"],
+                "questions": [
+                    "What input validation and preprocessing is performed on inference requests?",
+                    "How do you handle potentially malicious or malformed input data?",
+                    "Has your model been tested against adversarial examples?"
+                ]
+            },
+            "supply_chain": {
+                "keywords": ["model source", "pretrained", "dependencies", "third-party"],
+                "questions": [
+                    "Are you using any pre-trained models or third-party ML components?",
+                    "How do you verify the integrity and security of your ML dependencies?",
+                    "What is the provenance of your model weights and training code?"
+                ]
+            },
+            "prompt_injection": {
+                "keywords": ["prompt", "llm", "language model", "user input"],
+                "questions": [
+                    "If using language models, how do you sanitize user prompts?",
+                    "What controls prevent prompt injection or jailbreaking attempts?",
+                    "How do you separate system prompts from user input?"
+                ]
+            },
+            "inference_time_attacks": {
+                "keywords": ["prediction", "inference", "runtime", "model serving"],
+                "questions": [
+                    "How is your model served and what security controls exist at inference time?",
+                    "What monitoring exists for unusual prediction patterns or model behavior?",
+                    "How do you handle concurrent inference requests and resource limits?"
+                ]
+            }
+        }
+        
+        # Determine if this is the first interaction or a follow-up
+        is_initial = len(request.conversation_history) == 0
+        
+        if is_initial:
+            # Initial analysis: scan DFD for ML attack indicators
+            logger.debug("Initial chat analysis of DFD")
+            
+            # Analyze DFD content for ML-related keywords
+            dfd_lower = request.textual_dfd.lower()
+            detected_areas = []
+            
+            for area, info in ml_attack_knowledge.items():
+                if any(keyword in dfd_lower for keyword in info["keywords"]):
+                    detected_areas.append(area)
+            
+            # If no ML-specific keywords found, add general ML security areas
+            if not detected_areas:
+                detected_areas = ["supply_chain", "adversarial_examples", "model_stealing"]
+            
+            logger.info(f"Detected ML attack areas: {detected_areas}")
+            
+            # Generate initial questions based on detected areas
+            initial_questions = []
+            for area in detected_areas[:2]:  # Start with top 2 areas
+                initial_questions.extend(ml_attack_knowledge[area]["questions"][:1])
+            
+            assistant_response = f"""I'm analyzing your data-flow diagram for ML security concerns. I've identified some areas that need clarification to properly assess ML-specific threats.
 
-        first_round = not request.answers  # no answers yet
+Let me start with a few key questions:
 
-        if first_round:
-            # models aren't good at knowing what they dont know
-            # more principled questions over open questions
-            # better prompting for more principled questions
-            prompt = f"""You are a senior security-threat-modeling analyst.
-We have the following data-flow diagram description (possibly incomplete or ambiguous):
+{chr(10).join(f"{i+1}. {q}" for i, q in enumerate(initial_questions))}
 
-{request.textual_dfd}
-
-Your task: ask concise *clarifying questions* (1-5) that will help you fully understand and improve the DFD. Use the following JSON format only:
-{{
-  "questions": ["...", "...", ...]
-}}
-CRITICAL: Output ONLY the JSON object. ENSURE THAT THE FORMAT IS FOLLOWED EXACTLY. Use empty lists where appropriate."""
-            response_schema = {"type": "object", "properties": {"questions": {"type": "array", "items": {"type": "string"}}}}
-            messages = [{"role": "user", "content": prompt}]
-            json_str = llm.chat_completion_json(messages=messages, temperature=0.0, response_schema=response_schema)
-            data = json.loads(json_str)
-            questions = data.get("questions", [])
-            result = DFDRefinementResponse(
-                textual_dfd=request.textual_dfd,
-                questions=questions,
+Please provide as much detail as you can about these aspects of your ML system."""
+            
+            return ChatRefinementResponse(
                 message="need_more_info",
+                status="need_more_info",
+                assistant_response=assistant_response,
+                refined_dfd="",
+                structured_answers=[],
+                coverage_analysis={"detected_areas": detected_areas, "covered_areas": []}
             )
-            return result
+        
+        else:
+            # Follow-up: extract structured info and decide next steps
+            logger.debug("Processing follow-up conversation")
+            
+            # Get the user's latest response
+            user_messages = [msg for msg in request.conversation_history if msg.role == "user"]
+            if not user_messages:
+                raise ValueError("No user messages found in conversation history")
+            
+            latest_user_response = user_messages[-1].content
+            
+            # Extract structured information from user response
+            extraction_prompt = f"""### ROLE
+You are an ML security analyst extracting structured information from user responses.
 
-        # ========= answer refinement =========
-        qa_pairs = "\n".join([f"Q{i+1}: {q}\nA{i+1}: {a}" for i, (q, a) in enumerate(zip(request.questions, request.answers))])
-        prompt = f"""You are a senior security-threat-modeling analyst.
-Below is the current DFD description and the user's answers to your previous questions. If you still need information, ask new questions. Otherwise, return an improved *textual DFD* in the required JSON format.
+### TASK
+Analyze the user's response about their ML system and extract specific security-relevant information. 
 
-CURRENT DFD:
+### USER'S RESPONSE
+"{latest_user_response}"
+
+### ORIGINAL DFD CONTEXT
 {request.textual_dfd}
 
-USER Q&A:
-{qa_pairs}
-
-### OUTPUT OPTIONS (choose one)
-1. Needs more info ⇒
+### EXTRACTION SCHEMA
+For each piece of security-relevant information, output:
 {{
-  "questions": ["...", "..."],
-  "message": "need_more_info"
+  "extractions": [
+    {{
+      "question_id": "auto-generated-id",
+      "attack_area": "one of: data_poisoning|model_stealing|adversarial_examples|supply_chain|prompt_injection|inference_time_attacks",
+      "confidence_score": 0.0-1.0,
+      "extracted_answer": "specific factual answer",
+      "raw_user_response": "original user text"
+    }}
+  ],
+  "coverage_assessment": {{
+    "areas_covered": ["list of ML attack areas addressed"],
+    "confidence_level": 0.0-1.0,
+    "needs_followup": true/false,
+    "next_priority_areas": ["areas needing more info"]
+  }}
 }}
-2. Satisfied ⇒
-{{
-  "textual_dfd": "<refined DFD string in YAML format>",
-  "questions": [],
-  "message": "success"
-}}
-CRITICAL: Output ONLY the JSON object. ENSURE THAT THE FORMAT IS FOLLOWED EXACTLY. Use empty lists where appropriate."""
-        response_schema = DFDRefinementResponse.model_json_schema()
-        messages = [{"role": "user", "content": prompt}]
-        json_str = llm.chat_completion_json(messages=messages, temperature=0.0, response_schema=response_schema)
-        result = DFDRefinementResponse.model_validate_json(json_str)
-        processing_time = time.time() - start_time
-        logger.info(f"DFD refinement completed in {processing_time:.2f}s with message={result.message}")
-        return result
 
+CRITICAL: Output ONLY valid JSON. Focus on ML security specifics."""
+            
+            messages = [
+                {"role": "system", "content": "You are an ML security analyst."},
+                {"role": "user", "content": extraction_prompt}
+            ]
+            
+            extraction_response = llm.chat_completion_json(
+                messages=messages,
+                temperature=0.0,
+                response_schema={}  # Allow flexible JSON response
+            )
+            
+            extraction_data = json.loads(extraction_response)
+            logger.debug(f"Extraction result: {extraction_data}")
+            
+            # Convert extractions to StructuredAnswer objects
+            new_structured_answers = []
+            for ext in extraction_data.get("extractions", []):
+                try:
+                    structured_answer = StructuredAnswer(
+                        question_id=ext["question_id"],
+                        attack_area=ext["attack_area"],
+                        confidence_score=ext["confidence_score"],
+                        extracted_answer=ext["extracted_answer"],
+                        raw_user_response=ext["raw_user_response"]
+                    )
+                    new_structured_answers.append(structured_answer)
+                except Exception as e:
+                    logger.warning(f"Failed to create StructuredAnswer: {e}")
+            
+            # Combine with previous structured answers
+            all_structured_answers = request.structured_answers + new_structured_answers
+            
+            coverage = extraction_data.get("coverage_assessment", {})
+            needs_followup = coverage.get("needs_followup", True)
+            
+            if needs_followup and coverage.get("confidence_level", 0) < 0.8:
+                # Generate follow-up questions
+                priority_areas = coverage.get("next_priority_areas", ["supply_chain"])
+                
+                followup_questions = []
+                for area in priority_areas[:2]:
+                    if area in ml_attack_knowledge:
+                        followup_questions.extend(ml_attack_knowledge[area]["questions"][:1])
+                
+                assistant_response = f"""Thank you for that information. I have a few more questions to ensure comprehensive ML security coverage:
+
+{chr(10).join(f"{i+1}. {q}" for i, q in enumerate(followup_questions))}
+
+This will help me identify potential ML-specific threat vectors."""
+                
+                return ChatRefinementResponse(
+                    message="need_more_info",
+                    status="need_more_info", 
+                    assistant_response=assistant_response,
+                    refined_dfd="",
+                    structured_answers=all_structured_answers,
+                    coverage_analysis={
+                        "covered_areas": coverage.get("areas_covered", []),
+                        "priority_areas": priority_areas,
+                        "confidence": coverage.get("confidence_level", 0)
+                    }
+                )
+            
+            else:
+                # Sufficient information gathered - prepare Q&A for context enumeration
+                logger.info("Sufficient information gathered, preparing Q&A for context enumeration")
+                
+                # Extract questions and answers from the conversation
+                questions = []
+                answers = []
+                
+                # Get all assistant questions and user responses from conversation
+                conversation = request.conversation_history
+                for i in range(0, len(conversation) - 1, 2):
+                    if (i < len(conversation) and 
+                        conversation[i].role == "assistant" and 
+                        i + 1 < len(conversation) and 
+                        conversation[i + 1].role == "user"):
+                        
+                        # Extract questions from assistant message
+                        assistant_msg = conversation[i].content
+                        user_response = conversation[i + 1].content
+                        
+                        # Simple question extraction (look for numbered questions)
+                        import re
+                        question_matches = re.findall(r'\d+\.\s*(.+?)(?=\n\d+\.|$)', assistant_msg, re.DOTALL)
+                        if question_matches:
+                            for question in question_matches:
+                                questions.append(question.strip())
+                                answers.append(user_response.strip())
+                        else:
+                            # If no numbered questions, treat whole assistant message as one question
+                            questions.append(assistant_msg.strip())
+                            answers.append(user_response.strip())
+                
+                return ChatRefinementResponse(
+                    message="success",
+                    status="success",
+                    assistant_response="I have enough information. You can now proceed to context enumeration with this Q&A data.",
+                    questions=questions,
+                    answers=answers,
+                    structured_answers=all_structured_answers,
+                    coverage_analysis={
+                        "covered_areas": coverage.get("areas_covered", []),
+                        "total_insights": len(all_structured_answers),
+                        "final_confidence": coverage.get("confidence_level", 0.8)
+                    }
+                )
+        
     except Exception as e:
         processing_time = time.time() - start_time
-        logger.error(f"Error in refine_dfd after {processing_time:.2f}s: {str(e)}", exc_info=True)
+        logger.error(f"Error in chat refinement endpoint after {processing_time:.2f}s: {str(e)}", exc_info=True)
         raise
+    
+    finally:
+        processing_time = time.time() - start_time
+        logger.info(f"Chat refinement endpoint completed in {processing_time:.2f}s")

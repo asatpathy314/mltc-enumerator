@@ -1,0 +1,181 @@
+import { useState, useRef, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { ApiService, ChatRefinementRequest, ChatMessage } from "@/lib/api";
+import { toast } from "sonner";
+
+interface DfdChatProps {
+  initialDfd: string;
+  onComplete: (dfd: string, questions: string[], answers: string[]) => void;
+}
+
+export default function DfdChat({ initialDfd, onComplete }: DfdChatProps) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [currentInput, setCurrentInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState<ChatMessage[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Initialize with first LLM question
+  useEffect(() => {
+    const initializeChat = async () => {
+      setIsLoading(true);
+      try {
+        const request: ChatRefinementRequest = {
+          textual_dfd: initialDfd,
+          conversation_history: [],
+          structured_answers: [],
+        };
+        const response = await ApiService.chatRefine(request);
+        
+        if (response.status === "need_more_info") {
+          const assistantMessage: ChatMessage = {
+            role: "assistant",
+            content: response.assistant_response,
+            timestamp: new Date().toISOString(),
+          };
+          setMessages([assistantMessage]);
+          setConversationHistory([assistantMessage]);
+        } else if (response.status === "success") {
+          onComplete(initialDfd, response.questions, response.answers);
+        }
+      } catch (error) {
+        toast.error("Failed to initialize chat");
+        console.error(error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeChat();
+  }, [initialDfd, onComplete]);
+
+  const handleSendMessage = async () => {
+    if (!currentInput.trim() || isLoading) return;
+
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: currentInput,
+      timestamp: new Date().toISOString(),
+    };
+
+    const newMessages = [...messages, userMessage];
+    const newConversationHistory = [...conversationHistory, userMessage];
+    
+    setMessages(newMessages);
+    setConversationHistory(newConversationHistory);
+    setCurrentInput("");
+    setIsLoading(true);
+
+    try {
+      const request: ChatRefinementRequest = {
+        textual_dfd: initialDfd,
+        conversation_history: newConversationHistory,
+        structured_answers: [], // Could be accumulated from previous rounds
+      };
+
+      const response = await ApiService.chatRefine(request);
+
+      const assistantMessage: ChatMessage = {
+        role: "assistant",
+        content: response.assistant_response,
+        timestamp: new Date().toISOString(),
+      };
+
+      const updatedMessages = [...newMessages, assistantMessage];
+      const updatedConversation = [...newConversationHistory, assistantMessage];
+      
+      setMessages(updatedMessages);
+      setConversationHistory(updatedConversation);
+
+      if (response.status === "success") {
+        // Show completion message and then transition
+        setTimeout(() => {
+          onComplete(initialDfd, response.questions, response.answers);
+        }, 2000); // Give user time to read final message
+      }
+    } catch (error) {
+      toast.error("Failed to send message");
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-[600px] border rounded-lg">
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.map((message, index) => (
+          <div
+            key={index}
+            className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+          >
+            <Card className={`max-w-[80%] ${message.role === "user" ? "bg-blue-50" : "bg-gray-50"}`}>
+              <CardContent className="p-3">
+                <div className="text-sm text-gray-600 mb-1">
+                  {message.role === "user" ? "You" : "ML Security Assistant"}
+                </div>
+                <div className="whitespace-pre-wrap">{message.content}</div>
+                {message.timestamp && (
+                  <div className="text-xs text-gray-400 mt-2">
+                    {new Date(message.timestamp).toLocaleTimeString()}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        ))}
+        {isLoading && (
+          <div className="flex justify-start">
+            <Card className="bg-gray-50">
+              <CardContent className="p-3">
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-gray-600 rounded-full"></div>
+                  <span className="text-sm text-gray-600">ML Security Assistant is analyzing...</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input */}
+      <div className="border-t p-4">
+        <div className="flex space-x-2">
+          <Textarea
+            value={currentInput}
+            onChange={(e) => setCurrentInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Type your response about your ML system's security..."
+            className="flex-1 min-h-[60px]"
+            disabled={isLoading}
+          />
+          <Button onClick={handleSendMessage} disabled={isLoading || !currentInput.trim()}>
+            Send
+          </Button>
+        </div>
+        <div className="text-xs text-gray-500 mt-2">
+          Press Enter to send, Shift+Enter for new line
+        </div>
+      </div>
+    </div>
+  );
+} 

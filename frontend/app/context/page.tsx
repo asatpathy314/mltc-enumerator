@@ -33,9 +33,31 @@ export default function ContextPage() {
   });
 
   useEffect(() => {
-    const prefill = sessionStorage.getItem("contextPrefillDfd");
-    if (prefill) {
-      setDefaultValues((prev) => ({ ...prev, textual_dfd: prefill }));
+    const prefillDfd = sessionStorage.getItem("contextPrefillDfd");
+    const prefillQuestions = sessionStorage.getItem("contextPrefillQuestions");
+    const prefillAnswers = sessionStorage.getItem("contextPrefillAnswers");
+    
+    const updates: Partial<ContextFormValues> = {};
+    
+    if (prefillDfd) {
+      updates.textual_dfd = prefillDfd;
+    }
+    
+    if (prefillQuestions && prefillAnswers) {
+      try {
+        const questions = JSON.parse(prefillQuestions);
+        const answers = JSON.parse(prefillAnswers);
+        if (Array.isArray(questions) && Array.isArray(answers)) {
+          updates.questions = questions;
+          updates.answers = answers;
+        }
+      } catch (error) {
+        console.error("Failed to parse prefilled Q&A:", error);
+      }
+    }
+    
+    if (Object.keys(updates).length > 0) {
+      setDefaultValues((prev) => ({ ...prev, ...updates }));
     }
   }, []);
 

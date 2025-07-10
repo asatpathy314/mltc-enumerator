@@ -68,7 +68,60 @@ class ThreatChain(BaseModel):
 class ThreatEnumeration(BaseModel):
     threat_chains: List[ThreatChain]
 
-# --------- New: DFD Refinement ----------
+# --------- New: Chat-based ML-aware Refinement ----------
+class ChatMessage(BaseModel):
+    """A single message in the chat conversation."""
+    role: str  # "user" | "assistant"
+    content: str
+    timestamp: Optional[str] = None
+
+class MLAttackArea(str, Enum):
+    """Known ML attack categories to guide questioning."""
+    data_poisoning = "data_poisoning"
+    model_stealing = "model_stealing"
+    adversarial_examples = "adversarial_examples"
+    membership_inference = "membership_inference"
+    model_inversion = "model_inversion"
+    backdoor_attacks = "backdoor_attacks"
+    supply_chain = "supply_chain"
+    prompt_injection = "prompt_injection"
+    training_data_exposure = "training_data_exposure"
+    inference_time_attacks = "inference_time_attacks"
+
+class StructuredAnswer(BaseModel):
+    """Structured extraction from natural language user response."""
+    question_id: str
+    attack_area: MLAttackArea
+    confidence_score: float = Field(..., ge=0.0, le=1.0)
+    extracted_answer: str
+    raw_user_response: str
+
+class ChatRefinementRequest(BaseModel):
+    """Client → server payload for chat-based DFD refinement."""
+    textual_dfd: str
+    conversation_history: List[ChatMessage] = []
+    # Optional: previous structured answers from earlier rounds
+    structured_answers: List[StructuredAnswer] = []
+
+class ChatRefinementResponse(BaseModel):
+    """Server → client payload for chat conversation.
+    
+    Contains the assistant's natural language response plus structured data
+    about what information has been gathered and next steps.
+    """
+    message: str  # Natural language response to user
+    status: str   # "need_more_info" | "success" 
+    
+    # When status = "need_more_info":
+    assistant_response: str  # Natural language question/response
+    
+    # When status = "success":
+    questions: List[str] = []  # Collected questions for context enumeration
+    answers: List[str] = []    # Collected answers for context enumeration
+    structured_answers: List[StructuredAnswer]  # All gathered structured data
+    coverage_analysis: dict  # Which ML attack areas were covered
+
+# --------- Legacy: Keep for backward compatibility ----------
 class DFDRefinementRequest(BaseModel):
     """Client → server payload for refining a textual DFD."""
     textual_dfd: str

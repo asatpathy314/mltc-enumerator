@@ -10,7 +10,6 @@ import EditableAttackersList from '@/components/editable-attackers-list';
 import EditableEntryPointsList from '@/components/editable-entry-points-list';
 import EditableAssetsList from '@/components/editable-assets-list';
 import EditableAssumptionsList from '@/components/editable-assumptions-list';
-import EditableQuestionsList from '@/components/editable-questions-list';
 import { toast } from 'sonner';
 
 export default function ContextResultsPage() {
@@ -76,17 +75,6 @@ export default function ContextResultsPage() {
       assumptions: updatedAssumptions
     };
     
-    setEditedContext(updatedContext);
-    setHasEdits(true);
-  };
-
-  const handleQAChange = (updatedQuestions: string[], updatedAnswers: string[]) => {
-    if (!editedContext) return;
-    const updatedContext = {
-      ...editedContext,
-      questions: updatedQuestions,
-      answers: updatedAnswers,
-    };
     setEditedContext(updatedContext);
     setHasEdits(true);
   };
@@ -159,12 +147,11 @@ export default function ContextResultsPage() {
       </div>
 
       <Tabs defaultValue="attackers">
-        <TabsList className="mb-8 w-full grid grid-cols-5">
+        <TabsList className="mb-8 w-full grid grid-cols-4">
           <TabsTrigger value="attackers">Attackers</TabsTrigger>
           <TabsTrigger value="entry-points">Entry Points</TabsTrigger>
           <TabsTrigger value="assets">Assets</TabsTrigger>
           <TabsTrigger value="assumptions">Assumptions</TabsTrigger>
-          <TabsTrigger value="questions">Questions</TabsTrigger>
         </TabsList>
         <TabsContent value="attackers">
           <h2 className="text-xl font-semibold mb-4">Identified Attackers</h2>
@@ -192,14 +179,6 @@ export default function ContextResultsPage() {
           <EditableAssumptionsList 
             assumptions={editedContext.assumptions} 
             onAssumptionsChange={handleAssumptionsChange}
-          />
-        </TabsContent>
-        <TabsContent value="questions">
-          <h2 className="text-xl font-semibold mb-4">Questions & Answers</h2>
-          <EditableQuestionsList 
-            questions={editedContext.questions} 
-            answers={editedContext.answers}
-            onQAChange={handleQAChange}
           />
         </TabsContent>
       </Tabs>
