@@ -1,7 +1,6 @@
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from schemas import *
-from openai import OpenAI
 from services.client import LLMClient, ModelType
 import logging
 import sys
@@ -307,6 +306,9 @@ async def refine_dfd(request: DFDRefinementRequest) -> DFDRefinementResponse:
         first_round = not request.answers  # no answers yet
 
         if first_round:
+            # models aren't good at knowing what they dont know
+            # more principled questions over open questions
+            # better prompting for more principled questions
             prompt = f"""You are a senior security-threat-modeling analyst.
 We have the following data-flow diagram description (possibly incomplete or ambiguous):
 
@@ -348,7 +350,7 @@ USER Q&A:
 }}
 2. Satisfied ⇒
 {{
-  "textual_dfd": "<refined DFD>",
+  "textual_dfd": "<refined DFD string in YAML format>",
   "questions": [],
   "message": "success"
 }}
