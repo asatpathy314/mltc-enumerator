@@ -123,7 +123,7 @@ class LLMClient:
         Args:
             messages: List of message dictionaries with 'role' and 'content'
             temperature: Sampling temperature
-            response_schema: Optional schema for structured output (not used for local models)
+            response_schema: Optional schema for structured output.
             
         Returns:
             Extracted JSON string

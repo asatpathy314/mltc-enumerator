@@ -307,53 +307,26 @@ async def refine_with_chat(request: ChatRefinementRequest) -> ChatRefinementResp
         
         # ML Attack Knowledge Base - areas to investigate
         ml_attack_knowledge = {
-            "data_poisoning": {
-                "keywords": ["training data", "dataset", "data source", "training pipeline"],
-                "questions": [
-                    "Where does your training data come from and how is it validated?",
-                    "What controls prevent malicious data from entering your training pipeline?",
-                    "How do you verify the integrity of your training datasets?"
-                ]
+            "reconnaissance_discovery": {
+                "keywords": ["documentation", "public", "research", "architecture", "dataset"],
             },
-            "model_stealing": {
-                "keywords": ["model access", "api", "inference", "model weights"],
-                "questions": [
-                    "Who has access to your model weights or architecture details?",
-                    "How is access to your model inference API controlled?",
-                    "What information is returned by your model's prediction endpoints?"
-                ]
+            "resource_capability_development": {
+                "keywords": ["training environment", "gpu", "compute", "staging", "development"],
             },
-            "adversarial_examples": {
-                "keywords": ["input validation", "preprocessing", "robustness"],
-                "questions": [
-                    "What input validation and preprocessing is performed on inference requests?",
-                    "How do you handle potentially malicious or malformed input data?",
-                    "Has your model been tested against adversarial examples?"
-                ]
+            "supply_chain_dependency_poisoning": {
+                "keywords": ["dependencies", "packages", "containers", "provenance", "integrity"],
             },
-            "supply_chain": {
-                "keywords": ["model source", "pretrained", "dependencies", "third-party"],
-                "questions": [
-                    "Are you using any pre-trained models or third-party ML components?",
-                    "How do you verify the integrity and security of your ML dependencies?",
-                    "What is the provenance of your model weights and training code?"
-                ]
+            "initial_ongoing_access_vectors": {
+                "keywords": ["authentication", "api access", "plugins", "social engineering", "credentials"],
             },
-            "prompt_injection": {
-                "keywords": ["prompt", "llm", "language model", "user input"],
-                "questions": [
-                    "If using language models, how do you sanitize user prompts?",
-                    "What controls prevent prompt injection or jailbreaking attempts?",
-                    "How do you separate system prompts from user input?"
-                ]
+            "model_data_extraction_privacy": {
+                "keywords": ["inference api", "embeddings", "training data", "privacy", "extraction"],
             },
-            "inference_time_attacks": {
-                "keywords": ["prediction", "inference", "runtime", "model serving"],
-                "questions": [
-                    "How is your model served and what security controls exist at inference time?",
-                    "What monitoring exists for unusual prediction patterns or model behavior?",
-                    "How do you handle concurrent inference requests and resource limits?"
-                ]
+            "model_manipulation_persistence": {
+                "keywords": ["model weights", "fine-tuning", "deserialization", "integrity", "backdoors"],
+            },
+            "adversarial_service_disruption": {
+                "keywords": ["adversarial inputs", "denial of service", "performance", "monitoring", "validation"],
             }
         }
         
@@ -361,31 +334,99 @@ async def refine_with_chat(request: ChatRefinementRequest) -> ChatRefinementResp
         is_initial = len(request.conversation_history) == 0
         
         if is_initial:
-            # Initial analysis: scan DFD for ML attack indicators
-            logger.debug("Initial chat analysis of DFD")
+            # Initial analysis: use LLM to analyze DFD for ML attack indicators
+            logger.debug("Initial LLM-based analysis of DFD")
             
-            # Analyze DFD content for ML-related keywords
-            dfd_lower = request.textual_dfd.lower()
-            detected_areas = []
-            
-            for area, info in ml_attack_knowledge.items():
-                if any(keyword in dfd_lower for keyword in info["keywords"]):
-                    detected_areas.append(area)
-            
-            # If no ML-specific keywords found, add general ML security areas
-            if not detected_areas:
-                detected_areas = ["supply_chain", "adversarial_examples", "model_stealing"]
-            
-            logger.info(f"Detected ML attack areas: {detected_areas}")
-            
-            # Generate initial questions based on detected areas
-            initial_questions = []
-            for area in detected_areas[:2]:  # Start with top 2 areas
-                initial_questions.extend(ml_attack_knowledge[area]["questions"][:1])
-            
-            assistant_response = f"""I'm analyzing your data-flow diagram for ML security concerns. I've identified some areas that need clarification to properly assess ML-specific threats.
+            # Use LLM to analyze the DFD and determine relevant ML attack areas
+            analysis_prompt = f"""### TASK
+Analyze the provided DFD and determine which ML attack categories are relevant to the system.
 
-Let me start with a few key questions:
+### ML ATTACK CATEGORIES
+
+1. **Reconnaissance/Discovery** - Information gathering about ML system architecture, datasets, and public exposure
+2. **Resource Capability Development** - Attacker staging and capability development using available resources
+3. **Supply Chain Dependency Poisoning** - Comprehensive supply chain security including dependencies, containers, and provenance
+4. **Initial Ongoing Access Vectors** - Authentication bypass, API security, social engineering, and persistent access
+5. **Model Data Extraction Privacy** - Model parameter extraction, training data recovery, and privacy attacks
+6. **Model Manipulation Persistence** - Model integrity attacks, backdoors, and persistent manipulation
+7. **Adversarial Service Disruption** - Input-based attacks causing misclassification or service degradation
+
+### DFD TO ANALYZE
+{request.textual_dfd}
+
+### OUTPUT FORMAT
+{{
+  "analysis": {{
+    "relevant_areas": ["list of the relevant categories"],
+    "reasoning": "brief explanation of why these areas are relevant",
+    "ml_system_type": "description of what type of ML system this appears to be"
+  }}
+}}
+
+CRITICAL: Output ONLY valid JSON. Do NOT add any additional formatting. Do NOT add backticks. Focus on ML security questions."""
+            
+            messages = [
+                {"role": "system", "content": "You are a machine learning expert analyzing a data-flow diagram."},
+                {"role": "user", "content": analysis_prompt}
+            ]
+            
+            analysis_response = llm.chat_completion_json(
+                messages=messages,
+                temperature=0.0,
+                response_schema={}
+            )
+            
+            analysis_data = json.loads(analysis_response)
+            logger.debug(f"LLM analysis result: {analysis_data}")
+            
+            analysis = analysis_data.get("analysis", {})
+            detected_areas = analysis.get("relevant_areas", ["supply_chain_dependency_poisoning", "reconnaissance_discovery"])
+            reasoning = analysis.get("reasoning", "General ML security assessment")
+            
+            logger.info(f"LLM detected relevant ML attack areas: {detected_areas}")
+            
+            # Generate system-specific questions using template questions as examples
+            question_generation_prompt = f"""### TASK
+Let's think step by step.
+
+Based on the DFD analysis and the priority ML attack areas identified, generate up to 10 specific, tailored elicitation questions to learn more about this system.
+
+### PRIORITY ATTACK AREAS
+{', '.join(detected_areas[:2])}
+
+Reasoning: {reasoning}
+
+### SYSTEM BEING ANALYZED
+{request.textual_dfd}
+
+### OUTPUT FORMAT
+{{
+  "specific_questions": [list of specific questions]
+}}
+
+CRITICAL: OUTPUT ONLY VALID JSON WITH NO ADDITIONAL FORMATTING."""
+            
+            messages = [
+                {"role": "system", "content": "You are an ML expert generating specific, targeted questions to elicit valuable information for this particular system."},
+                {"role": "user", "content": question_generation_prompt}
+            ]
+            
+            question_response = llm.chat_completion_json(
+                messages=messages,
+                temperature=0.3,
+                response_schema={}
+            )
+            
+            question_data = json.loads(question_response)
+            initial_questions = question_data.get("specific_questions")
+            
+            logger.debug(f"Generated specific questions: {initial_questions}")
+            
+            assistant_response = f"""I'm analyzing your data-flow diagram for ML security concerns. Based on my analysis, this appears to be {analysis.get("ml_system_type", "an ML system")}.
+
+{reasoning}
+
+Let me start with some specific security questions about your system:
 
 {chr(10).join(f"{i+1}. {q}" for i, q in enumerate(initial_questions))}
 
@@ -404,19 +445,23 @@ Please provide as much detail as you can about these aspects of your ML system."
             # Follow-up: extract structured info and decide next steps
             logger.debug("Processing follow-up conversation")
             
-            # Get the user's latest response
+            # extract messages
+
+            chat_messages = [msg for msg in request.conversation_history if msg.role == "assistant"]
             user_messages = [msg for msg in request.conversation_history if msg.role == "user"]
+
             if not user_messages:
                 raise ValueError("No user messages found in conversation history")
             
+            latest_chat_message = chat_messages[-1].content
             latest_user_response = user_messages[-1].content
             
             # Extract structured information from user response
-            extraction_prompt = f"""### ROLE
-You are an ML security analyst extracting structured information from user responses.
-
-### TASK
+            extraction_prompt = f"""### TASK
 Analyze the user's response about their ML system and extract specific security-relevant information. 
+
+### MODEL QUESTIONS
+{latest_chat_message}
 
 ### USER'S RESPONSE
 "{latest_user_response}"
@@ -429,22 +474,18 @@ For each piece of security-relevant information, output:
 {{
   "extractions": [
     {{
-      "question_id": "auto-generated-id",
-      "attack_area": "one of: data_poisoning|model_stealing|adversarial_examples|supply_chain|prompt_injection|inference_time_attacks",
-      "confidence_score": 0.0-1.0,
+      "question": "specific question matching to the answer",
       "extracted_answer": "specific factual answer",
-      "raw_user_response": "original user text"
     }}
   ],
   "coverage_assessment": {{
-    "areas_covered": ["list of ML attack areas addressed"],
     "confidence_level": 0.0-1.0,
     "needs_followup": true/false,
-    "next_priority_areas": ["areas needing more info"]
+    "missing_information": "questions you feel need more clarification in natural language"
   }}
 }}
 
-CRITICAL: Output ONLY valid JSON. Focus on ML security specifics."""
+CRITICAL: Output ONLY valid JSON."""
             
             messages = [
                 {"role": "system", "content": "You are an ML security analyst."},
@@ -465,11 +506,8 @@ CRITICAL: Output ONLY valid JSON. Focus on ML security specifics."""
             for ext in extraction_data.get("extractions", []):
                 try:
                     structured_answer = StructuredAnswer(
-                        question_id=ext["question_id"],
-                        attack_area=ext["attack_area"],
-                        confidence_score=ext["confidence_score"],
+                        question=ext["question"],
                         extracted_answer=ext["extracted_answer"],
-                        raw_user_response=ext["raw_user_response"]
                     )
                     new_structured_answers.append(structured_answer)
                 except Exception as e:
@@ -478,23 +516,66 @@ CRITICAL: Output ONLY valid JSON. Focus on ML security specifics."""
             # Combine with previous structured answers
             all_structured_answers = request.structured_answers + new_structured_answers
             
+            # Build conversation context for use in follow-up and final extraction
+            conversation_text = ""
+            for msg in request.conversation_history:
+                role_label = "Assistant" if msg.role == "assistant" else "User"
+                conversation_text += f"\n\n{role_label}: {msg.content}"
+            
             coverage = extraction_data.get("coverage_assessment", {})
             needs_followup = coverage.get("needs_followup", True)
             
-            if needs_followup and coverage.get("confidence_level", 0) < 0.8:
-                # Generate follow-up questions
-                priority_areas = coverage.get("next_priority_areas", ["supply_chain"])
+            if needs_followup:
+                # Generate system-specific follow-up questions
+                missing_information = coverage.get("missing_information", "")
                 
-                followup_questions = []
-                for area in priority_areas[:2]:
-                    if area in ml_attack_knowledge:
-                        followup_questions.extend(ml_attack_knowledge[area]["questions"][:1])
+                # Generate specific follow-up questions using templates as examples
+                followup_prompt = f"""### TASK
+Based on the conversation so far and the analysis of missing information, generate follow-up questions to learn more about this system.
+
+### MISSING INFORMATION
+{missing_information}
+
+### SYSTEM CONTEXT
+{request.textual_dfd}
+
+### CONVERSATION SO FAR
+{conversation_text[-1000:]}  # Last 1000 chars to provide context
+
+### OUTPUT FORMAT
+{{
+  "followup_questions": [list of followup questions as strings]
+}}
+
+CRITICAL: Output ONLY valid JSON. Do NOT add any additional formatting."""
                 
-                assistant_response = f"""Thank you for that information. I have a few more questions to ensure comprehensive ML security coverage:
+                messages = [
+                    {"role": "system", "content": "You are a machine learning expert generating follow-up questions to learn more about this system."},
+                    {"role": "user", "content": followup_prompt}
+                ]
+                
+                try:
+                    followup_response = llm.chat_completion_json(
+                        messages=messages,
+                        temperature=0.3,
+                        response_schema={}
+                    )
+                    
+                    followup_data = json.loads(followup_response)
+                    followup_questions = followup_data.get("followup_questions")
+                    
+                except Exception as e:
+                    logger.error(f"Error in followup question generation: {str(e)}")
+                    logger.error(f"Raw followup response: {followup_response}")
+                    raise
+                
+                logger.debug(f"Generated specific follow-up questions: {followup_questions}")
+                
+                assistant_response = f"""Thank you for that information. I have a few more specific questions to ensure comprehensive ML security coverage:
 
 {chr(10).join(f"{i+1}. {q}" for i, q in enumerate(followup_questions))}
 
-This will help me identify potential ML-specific threat vectors."""
+This will help me identify potential ML-specific threat vectors for your system."""
                 
                 return ChatRefinementResponse(
                     message="need_more_info",
@@ -503,9 +584,9 @@ This will help me identify potential ML-specific threat vectors."""
                     refined_dfd="",
                     structured_answers=all_structured_answers,
                     coverage_analysis={
-                        "covered_areas": coverage.get("areas_covered", []),
-                        "priority_areas": priority_areas,
-                        "confidence": coverage.get("confidence_level", 0)
+                        "confidence": coverage.get("confidence_level", 0),
+                        "needs_followup": needs_followup,
+                        "missing_information": missing_information
                     }
                 )
             
@@ -516,12 +597,6 @@ This will help me identify potential ML-specific threat vectors."""
                 # Use LLM to extract proper Q&A pairs from the conversation
                 questions = []
                 answers = []
-                
-                # Build conversation context for extraction
-                conversation_text = ""
-                for msg in request.conversation_history:
-                    role_label = "Assistant" if msg.role == "assistant" else "User"
-                    conversation_text += f"\n\n{role_label}: {msg.content}"
                 
                 # LLM-powered Q&A extraction
                 qa_extraction_prompt = f"""### ROLE

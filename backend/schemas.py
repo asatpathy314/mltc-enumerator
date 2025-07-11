@@ -77,24 +77,18 @@ class ChatMessage(BaseModel):
 
 class MLAttackArea(str, Enum):
     """Known ML attack categories to guide questioning."""
-    data_poisoning = "data_poisoning"
-    model_stealing = "model_stealing"
-    adversarial_examples = "adversarial_examples"
-    membership_inference = "membership_inference"
-    model_inversion = "model_inversion"
-    backdoor_attacks = "backdoor_attacks"
-    supply_chain = "supply_chain"
-    prompt_injection = "prompt_injection"
-    training_data_exposure = "training_data_exposure"
-    inference_time_attacks = "inference_time_attacks"
+    reconnaissance_discovery = "reconnaissance_discovery"
+    resource_capability_development = "resource_capability_development"
+    supply_chain_dependency_poisoning = "supply_chain_dependency_poisoning"
+    initial_ongoing_access_vectors = "initial_ongoing_access_vectors"
+    model_data_extraction_privacy = "model_data_extraction_privacy"
+    model_manipulation_persistence = "model_manipulation_persistence"
+    adversarial_service_disruption = "adversarial_service_disruption"
 
 class StructuredAnswer(BaseModel):
     """Structured extraction from natural language user response."""
-    question_id: str
-    attack_area: MLAttackArea
-    confidence_score: float = Field(..., ge=0.0, le=1.0)
+    question: str
     extracted_answer: str
-    raw_user_response: str
 
 class ChatRefinementRequest(BaseModel):
     """Client → server payload for chat-based DFD refinement."""
@@ -130,7 +124,7 @@ class DFDRefinementRequest(BaseModel):
 
 
 class DFDRefinementResponse(BaseModel):
-    """Server → client payload.
+    """Server -> client payload.
 
     If ``questions`` is non-empty, the LLM needs more information.
     When the LLM believes the DFD is sufficiently refined it returns an
