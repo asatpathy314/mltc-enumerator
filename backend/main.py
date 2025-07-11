@@ -401,7 +401,12 @@ Reasoning: {reasoning}
 
 ### OUTPUT FORMAT
 {{
-  "specific_questions": [list of specific questions]
+  "specific_questions": [
+    "question 1",
+    "question 2",
+    ...
+    "question n",
+  ]
 }}
 
 CRITICAL: OUTPUT ONLY VALID JSON WITH NO ADDITIONAL FORMATTING."""

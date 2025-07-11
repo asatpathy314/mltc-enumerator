@@ -16,6 +16,13 @@ export default function DfdChat({ initialDfd, onComplete }: DfdChatProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<ChatMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const onCompleteRef = useRef(onComplete);
+  const hasInitialized = useRef(false);
+  
+  // Update the ref when onComplete changes
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -27,6 +34,12 @@ export default function DfdChat({ initialDfd, onComplete }: DfdChatProps) {
 
   // Initialize with first LLM question
   useEffect(() => {
+    // Prevent double initialization due to React Strict Mode
+    if (hasInitialized.current) {
+      return;
+    }
+    hasInitialized.current = true;
+
     const initializeChat = async () => {
       setIsLoading(true);
       try {
@@ -46,7 +59,7 @@ export default function DfdChat({ initialDfd, onComplete }: DfdChatProps) {
           setMessages([assistantMessage]);
           setConversationHistory([assistantMessage]);
         } else if (response.status === "success") {
-          onComplete(initialDfd, response.questions, response.answers);
+          onCompleteRef.current(initialDfd, response.questions, response.answers);
         }
       } catch (error) {
         toast.error("Failed to initialize chat");
@@ -57,7 +70,7 @@ export default function DfdChat({ initialDfd, onComplete }: DfdChatProps) {
     };
 
     initializeChat();
-  }, [initialDfd, onComplete]);
+  }, [initialDfd]); // Removed onComplete from dependencies since initialization should only happen once
 
   const handleSendMessage = async () => {
     if (!currentInput.trim() || isLoading) return;
@@ -100,7 +113,7 @@ export default function DfdChat({ initialDfd, onComplete }: DfdChatProps) {
       if (response.status === "success") {
         // Show completion message and then transition
         setTimeout(() => {
-          onComplete(initialDfd, response.questions, response.answers);
+          onCompleteRef.current(initialDfd, response.questions, response.answers);
         }, 2000); // Give user time to read final message
       }
     } catch (error) {
