@@ -3,11 +3,12 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     environment:
       - PYTHONPATH=/app
-      - LLM_BASE_URL=http://host.docker.internal:1234/v1
     volumes:
       - ./backend:/app
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload

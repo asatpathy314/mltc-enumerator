@@ -113,32 +113,4 @@ class ChatRefinementResponse(BaseModel):
     questions: List[str] = []  # Collected questions for context enumeration
     answers: List[str] = []    # Collected answers for context enumeration
     structured_answers: List[StructuredAnswer]  # All gathered structured data
-    coverage_analysis: dict  # Which ML attack areas were covered
-
-# --------- Legacy: Keep for backward compatibility ----------
-class DFDRefinementRequest(BaseModel):
-    """Client → server payload for refining a textual DFD."""
-    textual_dfd: str
-    questions: List[str] = []
-    answers: List[str] = []
-
-
-class DFDRefinementResponse(BaseModel):
-    """Server -> client payload.
-
-    If ``questions`` is non-empty, the LLM needs more information.
-    When the LLM believes the DFD is sufficiently refined it returns an
-    updated ``textual_dfd`` with an empty ``questions`` list and sets
-    ``message`` to "success".
-    """
-
-    textual_dfd: str
-    questions: List[str]
-    message: str  # "need_more_info" | "success"
-
-# ### Supply Chain Questions
-# Where's this model coming from?
-# What's the model trained on?
-# Where's the data that the model is trained on stored?
-# ### Context Enumeration
-# 
+    coverage_analysis: dict  # Which ML attack areas were covered 
