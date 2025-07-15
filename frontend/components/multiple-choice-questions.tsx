@@ -58,6 +58,14 @@ export default function MultipleChoiceQuestions({
     });
   };
 
+  const handleOtherSelect = (questionId: string) => {
+    const existingAnswer = getAnswerForQuestion(questionId);
+    updateAnswer(questionId, {
+      selected_option_id: undefined,
+      custom_answer: existingAnswer?.custom_answer || ""
+    });
+  };
+
   const startEditingOptions = (question: MultipleChoiceQuestion) => {
     setEditingOptions(prev => ({ ...prev, [question.id]: true }));
     setTempOptions(prev => ({ ...prev, [question.id]: [...question.options] }));
@@ -103,16 +111,16 @@ export default function MultipleChoiceQuestions({
     answers.every(a => a.selected_option_id || a.custom_answer);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {questions.map((question, questionIndex) => {
         const answer = getAnswerForQuestion(question.id);
         const options = getOptionsForQuestion(question);
         const isEditingThisQuestion = editingOptions[question.id];
 
         return (
-          <Card key={question.id} className="border-l-4 border-l-blue-500">
-            <CardHeader>
-              <CardTitle className="text-lg font-medium">
+          <Card key={question.id} className="border-l-4 border-l-blue-500 shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg font-medium leading-relaxed text-gray-800">
                 {questionIndex + 1}. {question.question}
               </CardTitle>
             </CardHeader>
@@ -120,7 +128,7 @@ export default function MultipleChoiceQuestions({
               {/* Answer Options */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label className="text-base font-medium">Choose an answer:</Label>
+                  <Label className="text-sm font-medium text-gray-700">Choose an answer:</Label>
                   {question.allow_edit_options && !isEditingThisQuestion && (
                     <Button
                       variant="outline"
@@ -152,65 +160,69 @@ export default function MultipleChoiceQuestions({
                 </div>
 
                 {/* Render options */}
-                {options.map((option, optionIndex) => (
-                  <div key={option.id} className="flex items-center space-x-3">
-                    {!isEditingThisQuestion ? (
-                      <>
-                        <input
-                          type="radio"
-                          id={`${question.id}-${option.id}`}
-                          name={`question-${question.id}`}
-                          checked={answer?.selected_option_id === option.id}
-                          onChange={() => handleOptionSelect(question.id, option.id)}
-                          className="h-4 w-4 text-blue-600"
-                        />
-                        <Label
-                          htmlFor={`${question.id}-${option.id}`}
-                          className="flex-1 cursor-pointer"
-                        >
-                          {option.text}
-                        </Label>
-                      </>
-                    ) : (
-                      <div className="flex-1 flex items-center space-x-2">
-                        <span className="text-sm text-gray-500">•</span>
-                        <Input
-                          value={tempOptions[question.id]?.[optionIndex]?.text || ""}
-                          onChange={(e) => updateTempOption(question.id, optionIndex, e.target.value)}
-                          className="flex-1"
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
+                <div className="space-y-3 pl-2">
+                  {options.map((option, optionIndex) => (
+                    <div key={option.id} className="flex items-start space-x-3">
+                      {!isEditingThisQuestion ? (
+                        <>
+                          <input
+                            type="radio"
+                            id={`${question.id}-${option.id}`}
+                            name={`question-${question.id}`}
+                            checked={answer?.selected_option_id === option.id}
+                            onChange={() => handleOptionSelect(question.id, option.id)}
+                            className="h-4 w-4 text-blue-600 accent-blue-600 focus:ring-blue-500 focus:ring-1 mt-1 flex-shrink-0"
+                          />
+                          <Label
+                            htmlFor={`${question.id}-${option.id}`}
+                            className="flex-1 cursor-pointer text-sm leading-relaxed text-gray-700 hover:text-gray-900"
+                          >
+                            {option.text}
+                          </Label>
+                        </>
+                      ) : (
+                        <div className="flex-1 flex items-center space-x-2">
+                          <span className="text-sm text-gray-500">•</span>
+                          <Input
+                            value={tempOptions[question.id]?.[optionIndex]?.text || ""}
+                            onChange={(e) => updateTempOption(question.id, optionIndex, e.target.value)}
+                            className="flex-1"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
 
                 {/* Other option */}
                 {question.allow_other && !isEditingThisQuestion && (
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-3">
+                  <div className="space-y-3 pl-2 border-t pt-3 mt-4">
+                    <div className="flex items-start space-x-3">
                       <input
                         type="radio"
                         id={`${question.id}-other`}
                         name={`question-${question.id}`}
-                        checked={!!answer?.custom_answer}
-                        onChange={() => handleCustomAnswer(question.id, answer?.custom_answer || "")}
-                        className="h-4 w-4 text-blue-600"
+                        checked={answer?.custom_answer !== undefined}
+                        onChange={() => handleOtherSelect(question.id)}
+                        className="h-4 w-4 text-blue-600 accent-blue-600 focus:ring-blue-500 focus:ring-1 mt-1 flex-shrink-0"
                       />
                       <Label
                         htmlFor={`${question.id}-other`}
-                        className="cursor-pointer font-medium"
+                        className="cursor-pointer font-medium text-sm text-gray-700"
                       >
                         Other (please specify):
                       </Label>
                     </div>
                     {(answer?.custom_answer !== undefined) && (
-                      <Textarea
-                        value={answer.custom_answer || ""}
-                        onChange={(e) => handleCustomAnswer(question.id, e.target.value)}
-                        placeholder="Please provide your own answer..."
-                        className="mt-2"
-                        rows={3}
-                      />
+                      <div className="ml-7">
+                        <Textarea
+                          value={answer.custom_answer || ""}
+                          onChange={(e) => handleCustomAnswer(question.id, e.target.value)}
+                          placeholder="Please provide your own answer..."
+                          className="mt-2 w-full"
+                          rows={3}
+                        />
+                      </div>
                     )}
                   </div>
                 )}
@@ -222,12 +234,12 @@ export default function MultipleChoiceQuestions({
 
       {/* Submit Button */}
       {questions.length > 0 && (
-        <div className="flex justify-end pt-4">
+        <div className="flex justify-end pt-4 border-t">
           <Button
             onClick={onSubmit}
             disabled={!isComplete || isLoading}
             size="lg"
-            className="px-8"
+            className="px-8 py-3"
           >
             {isLoading ? "Processing..." : "Submit Answers"}
           </Button>

@@ -165,20 +165,23 @@ export default function DfdChat({ initialDfd, onComplete }: DfdChatProps) {
 
     try {
       // Create a synthetic user message showing the choices made
-      const choicesText = multipleChoiceAnswers.map(answer => {
+      const choicesText = multipleChoiceAnswers.map((answer, index) => {
+        const question = currentQuestions.find(q => q.id === answer.question_id);
+        const questionText = question?.question || `Question ${index + 1}`;
+        
         if (answer.custom_answer) {
-          return `${answer.question_id}: ${answer.custom_answer}`;
+          return `Q${index + 1}: ${questionText}\nA: ${answer.custom_answer}`;
         } else if (answer.selected_option_id) {
-          const question = currentQuestions.find(q => q.id === answer.question_id);
           const option = question?.options.find(o => o.id === answer.selected_option_id);
-          return `${answer.question_id}: ${option?.text || answer.selected_option_id}`;
+          const optionText = option?.text || answer.selected_option_id;
+          return `Q${index + 1}: ${questionText}\nA: ${optionText}`;
         }
         return "";
-      }).filter(Boolean).join("\n");
+      }).filter(Boolean).join("\n\n");
 
       const userMessage: ChatMessage = {
         role: "user",
-        content: `Selected answers:\n${choicesText}`,
+        content: `${choicesText}`,
         timestamp: new Date().toISOString(),
       };
 
@@ -233,7 +236,7 @@ export default function DfdChat({ initialDfd, onComplete }: DfdChatProps) {
   };
 
   return (
-    <div className="flex flex-col h-[600px] border rounded-lg">
+    <div className="flex flex-col h-[800px] border rounded-lg">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message, index) => (
@@ -273,13 +276,18 @@ export default function DfdChat({ initialDfd, onComplete }: DfdChatProps) {
 
       {/* Multiple Choice Questions */}
       {showMultipleChoice && (
-        <div className="border-t p-4">
-          <MultipleChoiceQuestions
-            questions={currentQuestions}
-            onAnswersChange={handleMultipleChoiceAnswersChange}
-            onSubmit={handleMultipleChoiceSubmit}
-            isLoading={isLoading}
-          />
+        <div className="border-t bg-gray-50 flex flex-col max-h-[400px]">
+          <div className="p-4 border-b bg-white">
+            <h3 className="text-sm font-medium text-gray-700">Please answer the following questions:</h3>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <MultipleChoiceQuestions
+              questions={currentQuestions}
+              onAnswersChange={handleMultipleChoiceAnswersChange}
+              onSubmit={handleMultipleChoiceSubmit}
+              isLoading={isLoading}
+            />
+          </div>
         </div>
       )}
 

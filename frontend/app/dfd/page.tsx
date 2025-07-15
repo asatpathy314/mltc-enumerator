@@ -44,15 +44,15 @@ export default function DfdPage() {
 
   if (showChat) {
     return (
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold mb-2">ML Security Assessment</h1>
-          <p className="text-gray-600">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-3">ML Security Assessment</h1>
+          <p className="text-gray-600 text-lg">
             The assistant will ask questions to better understand your ML system&apos;s security context. Answer them to provide additional context for threat enumeration.
           </p>
         </div>
         <DfdChat initialDfd={initialDfd} onComplete={handleChatComplete} />
-        <div className="mt-4 flex justify-start">
+        <div className="mt-6 flex justify-start">
           <Button variant="outline" onClick={() => setShowChat(false)}>
             Back to DFD Entry
           </Button>
