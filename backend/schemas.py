@@ -90,15 +90,38 @@ class StructuredAnswer(BaseModel):
     question: str
     extracted_answer: str
 
+class MultipleChoiceOption(BaseModel):
+    """A single option in a multiple choice question."""
+    id: str
+    text: str
+    is_editable: bool = True
+
+class MultipleChoiceQuestion(BaseModel):
+    """A question with multiple choice options and support for custom answers."""
+    id: str
+    question: str
+    options: List[MultipleChoiceOption]
+    allow_other: bool = True
+    allow_edit_options: bool = True
+
+class UserAnswer(BaseModel):
+    """User's answer to a multiple choice question."""
+    question_id: str
+    selected_option_id: Optional[str] = None  # None if "other" was chosen
+    custom_answer: Optional[str] = None  # Set if "other" was chosen or option was edited
+    edited_options: List[MultipleChoiceOption] = []  # If user edited any options
+
 class ChatRefinementRequest(BaseModel):
-    """Client → server payload for chat-based DFD refinement."""
+    """Client -> server payload for chat-based DFD refinement."""
     textual_dfd: str
     conversation_history: List[ChatMessage] = []
     # Optional: previous structured answers from earlier rounds
     structured_answers: List[StructuredAnswer] = []
+    # Optional: answers to multiple choice questions
+    multiple_choice_answers: List[UserAnswer] = []
 
 class ChatRefinementResponse(BaseModel):
-    """Server → client payload for chat conversation.
+    """Server -> client payload for chat conversation.
     
     Contains the assistant's natural language response plus structured data
     about what information has been gathered and next steps.
@@ -108,6 +131,7 @@ class ChatRefinementResponse(BaseModel):
     
     # When status = "need_more_info":
     assistant_response: str  # Natural language question/response
+    multiple_choice_questions: List[MultipleChoiceQuestion] = []  # New: structured questions
     
     # When status = "success":
     questions: List[str] = []  # Collected questions for context enumeration

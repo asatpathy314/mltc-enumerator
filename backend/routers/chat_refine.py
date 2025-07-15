@@ -1,9 +1,10 @@
 from fastapi import APIRouter, status, Depends
-from schemas import ChatRefinementRequest, ChatRefinementResponse, StructuredAnswer
+from schemas import ChatRefinementRequest, ChatRefinementResponse, StructuredAnswer, MultipleChoiceQuestion, MultipleChoiceOption, UserAnswer
 from services.client import LLMClient
 from services.prompt_builder import PromptBuilder
 from dependencies import get_llm_client, get_prompt_builder
 from decorators import with_logging
+from typing import List
 import json
 import logging
 
@@ -12,6 +13,10 @@ logger = logging.getLogger(__name__)
 SYSTEM_PROMPT = """
 You are an ML-security analyst. Obey JSON schema, never ask direct security-control questions, focus on architecture, training and data provenance.
 """
+
+# Global state to track last sent questions for answer processing
+# In a production system, this should be stored in a database or session store
+_last_questions_by_dfd = {}
 
 @router.post("/refine", response_model=ChatRefinementResponse, status_code=status.HTTP_200_OK)
 @with_logging
@@ -49,29 +54,78 @@ async def _handle_initial_chat(
     
     question_response = await llm.chat_completion_json(messages=messages, temperature=0.3)
     question_data = json.loads(question_response)
-    initial_questions = question_data.get("specific_questions", [])
+    questions_with_options = question_data.get("questions_with_options", [])
     
-    logger.debug(f"Generated specific questions: {initial_questions}")
+    logger.debug(f"Generated questions with options: {questions_with_options}")
     
-    # Ensure questions are strings, not dicts
-    if initial_questions and isinstance(initial_questions[0], dict):
-        initial_questions = [q["question"] for q in initial_questions if "question" in q]
+    # Convert to MultipleChoiceQuestion objects
+    multiple_choice_questions = []
+    for q_data in questions_with_options:
+        options = [
+            MultipleChoiceOption(
+                id=opt["id"],
+                text=opt["text"],
+                is_editable=True
+            ) for opt in q_data.get("options", [])
+        ]
+        
+        mc_question = MultipleChoiceQuestion(
+            id=q_data["id"],
+            question=q_data["question"],
+            options=options,
+            allow_other=True,
+            allow_edit_options=True
+        )
+        multiple_choice_questions.append(mc_question)
 
+    # Generate fallback text for backward compatibility
+    question_text_list = [q.question for q in multiple_choice_questions]
     assistant_response = f"""I'm analyzing your data-flow diagram for ML security concerns.
     
-Let me start with some specific security questions about your system:
+Let me start with some specific security questions about your system. For each question, you can choose from the provided options, edit them if needed, or provide your own answer:
 
-{chr(10).join(f"{i+1}. {q}" for i, q in enumerate(initial_questions))}
-
-Please provide as much detail as you can about these aspects of your ML system."""
+{chr(10).join(f"{i+1}. {q}" for i, q in enumerate(question_text_list))}"""
+    
+    # Store questions for later answer processing
+    _last_questions_by_dfd[request.textual_dfd] = multiple_choice_questions
     
     return ChatRefinementResponse(
         message="need_more_info",
         status="need_more_info",
         assistant_response=assistant_response,
+        multiple_choice_questions=multiple_choice_questions,
         structured_answers=[],
         coverage_analysis={"detected_areas": detected_areas, "covered_areas": []}
     )
+
+def _convert_multiple_choice_answers_to_text(multiple_choice_answers: List[UserAnswer], questions: List[MultipleChoiceQuestion] = None) -> str:
+    """Convert multiple choice answers into a text format for processing."""
+    if not multiple_choice_answers:
+        return ""
+    
+    # Create a lookup map for questions and options if provided
+    questions_map = {}
+    if questions:
+        for q in questions:
+            options_map = {opt.id: opt.text for opt in q.options}
+            questions_map[q.id] = {
+                'question': q.question,
+                'options': options_map
+            }
+    
+    converted_text = []
+    for answer in multiple_choice_answers:
+        if answer.custom_answer:
+            # User provided a custom answer or "other"
+            question_text = questions_map.get(answer.question_id, {}).get('question', answer.question_id)
+            converted_text.append(f"Q: {question_text}\nA: {answer.custom_answer}")
+        elif answer.selected_option_id:
+            # User selected one of the options
+            question_text = questions_map.get(answer.question_id, {}).get('question', answer.question_id)
+            option_text = questions_map.get(answer.question_id, {}).get('options', {}).get(answer.selected_option_id, answer.selected_option_id)
+            converted_text.append(f"Q: {question_text}\nA: {option_text}")
+    
+    return "\n\n".join(converted_text)
 
 async def _handle_followup_chat(
     request: ChatRefinementRequest, llm: LLMClient, builder: PromptBuilder
@@ -87,6 +141,12 @@ async def _handle_followup_chat(
     
     latest_chat_message = chat_messages[-1].content
     latest_user_response = user_messages[-1].content
+    
+    # Include multiple choice answers in the user response
+    stored_questions = _last_questions_by_dfd.get(request.textual_dfd, [])
+    mc_answers_text = _convert_multiple_choice_answers_to_text(request.multiple_choice_answers, stored_questions)
+    if mc_answers_text:
+        latest_user_response += f"\n\nMultiple Choice Answers:\n{mc_answers_text}"
     
     extraction_prompt = builder.build_extraction_prompt(
         latest_chat_message, latest_user_response, request.textual_dfd
@@ -120,20 +180,46 @@ async def _handle_followup_chat(
         
         followup_response = await llm.chat_completion_json(messages=messages, temperature=0.3)
         followup_data = json.loads(followup_response)
-        followup_questions = followup_data.get("followup_questions", [])
+        questions_with_options = followup_data.get("questions_with_options", [])
         
-        logger.debug(f"Generated specific follow-up questions: {followup_questions}")
+        logger.debug(f"Generated follow-up questions with options: {questions_with_options}")
         
+        # Convert to MultipleChoiceQuestion objects
+        multiple_choice_questions = []
+        for q_data in questions_with_options:
+            options = [
+                MultipleChoiceOption(
+                    id=opt["id"],
+                    text=opt["text"],
+                    is_editable=True
+                ) for opt in q_data.get("options", [])
+            ]
+            
+            mc_question = MultipleChoiceQuestion(
+                id=q_data["id"],
+                question=q_data["question"],
+                options=options,
+                allow_other=True,
+                allow_edit_options=True
+            )
+            multiple_choice_questions.append(mc_question)
+
+        # Generate fallback text for backward compatibility
+        question_text_list = [q.question for q in multiple_choice_questions]
         assistant_response = f"""Thank you for that information. I have a few more specific questions to ensure comprehensive ML security coverage:
 
-{chr(10).join(f"{i+1}. {q}" for i, q in enumerate(followup_questions))}
+{chr(10).join(f"{i+1}. {q}" for i, q in enumerate(question_text_list))}
 
-This will help me identify potential ML-specific threat vectors for your system."""
+For each question, you can choose from the provided options, edit them if needed, or provide your own answer."""
+        
+        # Store questions for later answer processing
+        _last_questions_by_dfd[request.textual_dfd] = multiple_choice_questions
         
         return ChatRefinementResponse(
             message="need_more_info",
             status="need_more_info",
             assistant_response=assistant_response,
+            multiple_choice_questions=multiple_choice_questions,
             structured_answers=all_structured_answers,
             coverage_analysis={
                 "confidence": coverage.get("confidence_level", 0),

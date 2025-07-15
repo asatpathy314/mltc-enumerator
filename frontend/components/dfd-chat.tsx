@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { ApiService, ChatRefinementRequest, ChatMessage } from "@/lib/api";
+import { ApiService, ChatRefinementRequest, ChatMessage, MultipleChoiceQuestion, UserAnswer } from "@/lib/api";
 import { toast } from "sonner";
+import MultipleChoiceQuestions from "./multiple-choice-questions";
 
 interface DfdChatProps {
   initialDfd: string;
@@ -15,6 +16,9 @@ export default function DfdChat({ initialDfd, onComplete }: DfdChatProps) {
   const [currentInput, setCurrentInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<ChatMessage[]>([]);
+  const [currentQuestions, setCurrentQuestions] = useState<MultipleChoiceQuestion[]>([]);
+  const [multipleChoiceAnswers, setMultipleChoiceAnswers] = useState<UserAnswer[]>([]);
+  const [showMultipleChoice, setShowMultipleChoice] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const onCompleteRef = useRef(onComplete);
   const hasInitialized = useRef(false);
@@ -58,6 +62,14 @@ export default function DfdChat({ initialDfd, onComplete }: DfdChatProps) {
           };
           setMessages([assistantMessage]);
           setConversationHistory([assistantMessage]);
+          
+          // Handle multiple choice questions if present
+          if (response.multiple_choice_questions && response.multiple_choice_questions.length > 0) {
+            setCurrentQuestions(response.multiple_choice_questions);
+            setShowMultipleChoice(true);
+          } else {
+            setShowMultipleChoice(false);
+          }
         } else if (response.status === "success") {
           onCompleteRef.current(initialDfd, response.questions, response.answers);
         }
@@ -94,6 +106,7 @@ export default function DfdChat({ initialDfd, onComplete }: DfdChatProps) {
         textual_dfd: initialDfd,
         conversation_history: newConversationHistory,
         structured_answers: [], // Could be accumulated from previous rounds
+        multiple_choice_answers: multipleChoiceAnswers,
       };
 
       const response = await ApiService.chatRefine(request);
@@ -109,6 +122,15 @@ export default function DfdChat({ initialDfd, onComplete }: DfdChatProps) {
       
       setMessages(updatedMessages);
       setConversationHistory(updatedConversation);
+      
+      // Handle multiple choice questions if present
+      if (response.multiple_choice_questions && response.multiple_choice_questions.length > 0) {
+        setCurrentQuestions(response.multiple_choice_questions);
+        setShowMultipleChoice(true);
+        setMultipleChoiceAnswers([]); // Reset answers for new questions
+      } else {
+        setShowMultipleChoice(false);
+      }
 
       if (response.status === "success") {
         // Show completion message and then transition
@@ -128,6 +150,85 @@ export default function DfdChat({ initialDfd, onComplete }: DfdChatProps) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  const handleMultipleChoiceAnswersChange = (answers: UserAnswer[]) => {
+    setMultipleChoiceAnswers(answers);
+  };
+
+  const handleMultipleChoiceSubmit = async () => {
+    if (multipleChoiceAnswers.length === 0) return;
+
+    setIsLoading(true);
+    setShowMultipleChoice(false);
+
+    try {
+      // Create a synthetic user message showing the choices made
+      const choicesText = multipleChoiceAnswers.map(answer => {
+        if (answer.custom_answer) {
+          return `${answer.question_id}: ${answer.custom_answer}`;
+        } else if (answer.selected_option_id) {
+          const question = currentQuestions.find(q => q.id === answer.question_id);
+          const option = question?.options.find(o => o.id === answer.selected_option_id);
+          return `${answer.question_id}: ${option?.text || answer.selected_option_id}`;
+        }
+        return "";
+      }).filter(Boolean).join("\n");
+
+      const userMessage: ChatMessage = {
+        role: "user",
+        content: `Selected answers:\n${choicesText}`,
+        timestamp: new Date().toISOString(),
+      };
+
+      const newMessages = [...messages, userMessage];
+      const newConversationHistory = [...conversationHistory, userMessage];
+      
+      setMessages(newMessages);
+      setConversationHistory(newConversationHistory);
+
+      const request: ChatRefinementRequest = {
+        textual_dfd: initialDfd,
+        conversation_history: newConversationHistory,
+        structured_answers: [],
+        multiple_choice_answers: multipleChoiceAnswers,
+      };
+
+      const response = await ApiService.chatRefine(request);
+
+      const assistantMessage: ChatMessage = {
+        role: "assistant",
+        content: response.assistant_response,
+        timestamp: new Date().toISOString(),
+      };
+
+      const updatedMessages = [...newMessages, assistantMessage];
+      const updatedConversation = [...newConversationHistory, assistantMessage];
+      
+      setMessages(updatedMessages);
+      setConversationHistory(updatedConversation);
+      
+      // Handle multiple choice questions if present
+      if (response.multiple_choice_questions && response.multiple_choice_questions.length > 0) {
+        setCurrentQuestions(response.multiple_choice_questions);
+        setShowMultipleChoice(true);
+        setMultipleChoiceAnswers([]); // Reset answers for new questions
+      } else {
+        setShowMultipleChoice(false);
+      }
+
+      if (response.status === "success") {
+        setTimeout(() => {
+          onCompleteRef.current(initialDfd, response.questions, response.answers);
+        }, 2000);
+      }
+    } catch (error) {
+      toast.error("Failed to send answers");
+      console.error(error);
+      setShowMultipleChoice(true); // Show questions again on error
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -170,25 +271,39 @@ export default function DfdChat({ initialDfd, onComplete }: DfdChatProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="border-t p-4">
-        <div className="flex space-x-2">
-          <Textarea
-            value={currentInput}
-            onChange={(e) => setCurrentInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Type your response about your ML system's security..."
-            className="flex-1 min-h-[60px]"
-            disabled={isLoading}
+      {/* Multiple Choice Questions */}
+      {showMultipleChoice && (
+        <div className="border-t p-4">
+          <MultipleChoiceQuestions
+            questions={currentQuestions}
+            onAnswersChange={handleMultipleChoiceAnswersChange}
+            onSubmit={handleMultipleChoiceSubmit}
+            isLoading={isLoading}
           />
-          <Button onClick={handleSendMessage} disabled={isLoading || !currentInput.trim()}>
-            Send
-          </Button>
         </div>
-        <div className="text-xs text-gray-500 mt-2">
-          Press Enter to send, Shift+Enter for new line
+      )}
+
+      {/* Regular Text Input */}
+      {!showMultipleChoice && (
+        <div className="border-t p-4">
+          <div className="flex space-x-2">
+            <Textarea
+              value={currentInput}
+              onChange={(e) => setCurrentInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Type your response about your ML system's security..."
+              className="flex-1 min-h-[60px]"
+              disabled={isLoading}
+            />
+            <Button onClick={handleSendMessage} disabled={isLoading || !currentInput.trim()}>
+              Send
+            </Button>
+          </div>
+          <div className="text-xs text-gray-500 mt-2">
+            Press Enter to send, Shift+Enter for new line
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 } 

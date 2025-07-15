@@ -164,8 +164,8 @@ DFD:
 {request.textual_dfd}{hint_section}{qa_section}
 """
     def build_question_generation_prompt(self, detected_areas: List[str], reasoning: str, textual_dfd: str) -> str:
-        return f"""### Generate Questions
-Let's think step by step. To generate information elicitation questions. Focus on questions that
+        return f"""### Generate Questions with Multiple Choice Answers
+Let's think step by step. To generate information elicitation questions with potential answers. Focus on questions that
 could generate information about the system's architecture, training data, and model origin. Focus
 on questions that might provide information useful to the following categories of ML security:
 
@@ -182,16 +182,35 @@ on questions that might provide information useful to the following categories o
 {textual_dfd}
 
 ### OUTPUT FORMAT
+For each question, provide exactly 3 plausible answer options that are specific and realistic for the ML system domain:
+
 {{
-  "specific_questions": [
-    "question 1",
-    "question 2",
-    ...
+  "questions_with_options": [
+    {{
+      "id": "q1",
+      "question": "question text here",
+      "options": [
+        {{
+          "id": "q1_opt1",
+          "text": "specific realistic answer option 1"
+        }},
+        {{
+          "id": "q1_opt2", 
+          "text": "specific realistic answer option 2"
+        }},
+        ...
+        {{
+          "id": "q1_optn",
+          "text": "specific realistic answer option n"
+        }},
+      ]
+    }}
   ]
 }}
 
 <never>ask specific questions about encryption, authentication flows, or other security-control questions.</never>
 <always>Ask questions that are architecturally focused and meant to elicit information about the system's architecture, training data, and model origin.</always>
+<always>Make answer options specific, realistic, and diverse - avoid generic options like "Yes/No/Maybe".</always>
 <always>Output ONLY valid JSON.</always>"""
 
     def build_extraction_prompt(self, latest_chat_message: str, latest_user_response: str, textual_dfd: str) -> str:
@@ -232,7 +251,7 @@ CRITICAL: Output ONLY valid JSON."""
             conversation_text += f"\n\n{role_label}: {msg.content}"
 
         return f"""### TASK
-Based on the conversation so far and the analysis of missing information, generate follow-up questions to learn more about this system.
+Based on the conversation so far and the analysis of missing information, generate follow-up questions with multiple choice answers to learn more about this system.
 
 ### MISSING INFORMATION
 {missing_information}
@@ -244,11 +263,32 @@ Based on the conversation so far and the analysis of missing information, genera
 {conversation_text}
 
 ### OUTPUT FORMAT
+For each follow-up question, provide exactly 3 plausible answer options that are specific and realistic:
+
 {{
-  "followup_questions": [list of followup questions as strings]
+  "questions_with_options": [
+    {{
+      "id": "f1",
+      "question": "follow-up question text here",
+      "options": [
+        {{
+          "id": "f1_opt1",
+          "text": "specific realistic answer option 1"
+        }},
+        {{
+          "id": "f1_opt2", 
+          "text": "specific realistic answer option 2"
+        }},
+        {{
+          "id": "f1_opt3",
+          "text": "specific realistic answer option 3"
+        }}
+      ]
+    }}
+  ]
 }}
 
-CRITICAL: Output ONLY valid JSON. Do NOT add any additional formatting."""
+CRITICAL: Output ONLY valid JSON. Make answer options specific and realistic, avoid generic options."""
 
     def build_qa_extraction_prompt(self, conversation_history: List[ChatMessage]) -> str:
         conversation_text = ""
