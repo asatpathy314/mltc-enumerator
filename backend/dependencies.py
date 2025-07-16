@@ -1,6 +1,6 @@
 import asyncio
 from services.client import LLMClient, ModelType
-from services.prompt_builder import PromptBuilder
+from services.prompt_builder import PromptBuilder, ModularQuestionGenerator
 from settings import settings  # <-- new import
 
 llm_client_instance: LLMClient = None
@@ -34,3 +34,8 @@ async def get_llm_client() -> LLMClient:
 def get_prompt_builder() -> PromptBuilder:
     """Dependency injector for the PromptBuilder."""
     return PromptBuilder()
+
+def get_modular_question_generator() -> ModularQuestionGenerator:
+    """Dependency injector for the ModularQuestionGenerator."""
+    prompt_builder = get_prompt_builder()
+    return ModularQuestionGenerator(prompt_builder)
