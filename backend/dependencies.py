@@ -1,6 +1,7 @@
 import asyncio
 from services.client import LLMClient, ModelType
 from services.prompt_builder import PromptBuilder, ModularQuestionGenerator
+from services.threat_generator import ThreatChainGenerator
 from settings import settings  # <-- new import
 
 llm_client_instance: LLMClient = None
@@ -39,3 +40,8 @@ def get_modular_question_generator() -> ModularQuestionGenerator:
     """Dependency injector for the ModularQuestionGenerator."""
     prompt_builder = get_prompt_builder()
     return ModularQuestionGenerator(prompt_builder)
+
+async def get_threat_generator() -> ThreatChainGenerator:
+    """Dependency injector for the ThreatChainGenerator."""
+    llm_client = await get_llm_client()
+    return ThreatChainGenerator(llm_client)
