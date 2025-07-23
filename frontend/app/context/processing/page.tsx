@@ -2,24 +2,32 @@
 
 import { ApiService, ContextEnumeration, EnumerateRequest } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, Suspense } from "react";
 import { toast } from "sonner";
 
 function ProcessingContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const dataParam = searchParams.get("data");
   
-  // Parse the request data from URL params
-  const requestData: EnumerateRequest = dataParam ? JSON.parse(dataParam) : null;
+  // Get request data from sessionStorage instead of URL params
+  const requestData: EnumerateRequest = (() => {
+    if (typeof window !== 'undefined') {
+      const storedRequest = sessionStorage.getItem("contextRequest");
+      return storedRequest ? JSON.parse(storedRequest) : null;
+    }
+    return null;
+  })();
   
-  // Store the request data in sessionStorage for later use
+  // Store the request data in sessionStorage for later use (if not already stored)
   useEffect(() => {
     if (requestData) {
       sessionStorage.setItem("contextRequest", JSON.stringify(requestData));
+    } else {
+      // If no request data found, redirect back to context page
+      toast.error("No request data found. Please submit the form again.");
+      router.push("/context");
     }
-  }, [requestData]);
+  }, [requestData, router]);
 
   const { data, error, isError } = useQuery<ContextEnumeration>({
     queryKey: ["context", requestData],

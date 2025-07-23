@@ -90,10 +90,11 @@ export default function ContextPage() {
         answers: filteredAnswers,
       };
       
-      // Redirect to loading page with request payload
-      const searchParams = new URLSearchParams();
-      searchParams.append("data", JSON.stringify(request));
-      window.location.href = `/context/processing?${searchParams.toString()}`;
+      // Store request data in sessionStorage instead of URL
+      sessionStorage.setItem("contextRequest", JSON.stringify(request));
+      
+      // Redirect to loading page without data in URL
+      window.location.href = `/context/processing`;
     } catch (error) {
       toast.error("Failed to submit form");
       console.error(error);
